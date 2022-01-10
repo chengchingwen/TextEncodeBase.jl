@@ -53,32 +53,47 @@ function Base.show(io::IO, t::TokenStages)
     end
 end
 
-@inline splitting(::AbstractTokenizer, ::TokenStages, x) = x
-@inline splitting(t::AbstractTokenizer, d::DocumentStage) = splitting(t, d, rulebased_split_sentences(d.x))
-@inline splitting(t::AbstractTokenizer, s::SentenceStage) = splitting(t, s, nltk_word_tokenize(s.x))
-@inline splitting(t::AbstractTokenizer, s::SubSentenceStage) = splitting(t, s, nltk_word_tokenize(s.x))
+abstract type AbstractTokenization end
 
-@inline tokenize(t::AbstractTokenizer, ::DocumentStage, x) = tokenize(t, Sentence(x))
-@inline tokenize(t::AbstractTokenizer, ::SentenceStage, x) = tokenize(t, Token(x))
+let ATR = AbstractTokenizer, AT = AbstractTokenization
+    # [full dispatch, default to ignore tokenizer]
+    global @inline splitting(::ATR, t::AT, x::TokenStages)    = splitting(t, x)
+    global @inline splitting(::ATR, t::AT, s::TokenStages, x) = splitting(t, s, x)
+    # [tokenization dispatch] default splitting callback
+    global @inline splitting(::AT, ::TokenStages, x) = x
+    # [tokenization dispatch] default splitting behavior on specific stages
+    global @inline splitting(t::AT, d::DocumentStage)    = rulebased_split_sentences(d.x)
+    global @inline splitting(t::AT, s::SentenceStage)    = nltk_word_tokenize(s.x)
+    global @inline splitting(t::AT, s::SubSentenceStage) = nltk_word_tokenize(s.x)
 
-@inline tokenize(t::AbstractTokenizer, ::TokenStages, x::TokenStages) = tokenize(t, x)
-@inline tokenize(::AbstractTokenizer, ::TokenStages, t::TokenStage) = t
+    # [full dispatch, default to ignore tokenizer]
+    global @inline tokenize(tkr::ATR, t::AT, s::TokenStages, x) = tokenize(t, s, x)
+    # [tokenization dispatch] default behavior on specific stages, mark the splitting result for further tokenization
+    global @inline tokenize(::AT, ::DocumentStage, x) = Sentence(x)
+    global @inline tokenize(::AT, ::SentenceStage, x) = Token(x)
+    # [tokenization dispatch] skip if splitting result is already wrapped
+    global @inline tokenize(::AT, ::TokenStages, x::TokenStages) = x
+    # [full dispatch, default to ignore tokenizer] the outer-most api, but these stages are usually unsplittable
+    global @inline tokenize(::ATR, t::AT, x::Union{WordStage, SubWordStage, TokenStage}) = tokenize(t, x)
+    # [tokenization dispatch] default tokenization for these stages
+    global @inline tokenize(::AT, w::WordStage)    = [Token(w.x)]
+    global @inline tokenize(::AT, w::SubWordStage) = [Token(w.x)]
+    global @inline tokenize(::AT, t::TokenStage)   = [t]
+end
 
-@inline tokenize(::AbstractTokenizer, w::WordStage) = Token(w.x)
-@inline tokenize(::AbstractTokenizer, w::SubWordStage) = Token(w.x)
-@inline tokenize(::AbstractTokenizer, t::TokenStage) = t
-function tokenize(t::AT, x::TS) where {AT <: AbstractTokenizer, TS <: TokenStages}
-    v = TokenStages[]
+# [full dispatch] the outer-most api, splitting input and recursively tokenize the result. ignore if input is empty
+function tokenize(tkr::ATR, t::AT, x::TS) where {ATR <: AbstractTokenizer, AT <: AbstractTokenization, TS <: TokenStages}
+    v = TokenStage[]
     isempty(x.x) && return v
-    for s in splitting(t, x)
-        v1 = tokenize(t, x, s)
-        if v1 isa AbstractVector
-            append!(v, v1)
-        else
-            push!(v, v1)
-        end
+    for sp in splitting(tkr, t, x, splitting(tkr, t, x))
+        v1 = tokenize(tkr, t, tokenize(tkr, t, x, sp))
+        append!(v, v1)
     end
     return v
 end
 
-(t::AbstractTokenizer)(x::TS) where {TS <: TokenStages} = tokenize(t, x)
+struct DefaultTokenization <: AbstractTokenization end
+
+tokenization(::AbstractTokenizer) = DefaultTokenization()
+
+(t::AbstractTokenizer)(x::TS) where {TS <: TokenStages} = tokenize(t, tokenization(t), x)

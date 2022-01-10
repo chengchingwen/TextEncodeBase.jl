@@ -1,9 +1,10 @@
-abstract type IndexedTokenizer <: AbstractTokenizer end
+struct IndexedTokenization <: AbstractTokenization end
 
-@inline splitting(::IndexedTokenizer, ::TokenStages, x) = enumerate(x)
+@inline splitting(::IndexedTokenization, ::TokenStages, x) = enumerate(x)
 
-@inline tokenize(t::IndexedTokenizer, ::DocumentStage, (i, x)) = tokenize(t, Sentence(x, (sentence_id = i,)))
+@inline tokenize(t::IndexedTokenization, ::DocumentStage, (i, x)) = Sentence(x, (sentence_id = i,))
+@inline tokenize(t::IndexedTokenization, s::SentenceStage, (i, x)) = Token(x, merge(s.meta, (token_id = i,)))
 
-@inline tokenize(t::IndexedTokenizer, s::SentenceStage, (i, x)) = tokenize(t, Token(x, merge(s.meta, (token_id = i,))))
+struct NaiveIndexedTokenizer <: AbstractTokenizer end
 
-struct NaiveIndexedTokenizer <: IndexedTokenizer end
+tokenization(::NaiveIndexedTokenizer) = IndexedTokenization()
