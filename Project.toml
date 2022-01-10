@@ -1,7 +1,7 @@
 name = "TextEncodeBase"
 uuid = "f92c20c0-9f2a-4705-8116-881385faba05"
 authors = ["chengchingwen <adgjl5645@hotmail.com> and contributors"]
-version = "0.1.0"
+version = "0.0.1"
 
 [deps]
 PrimitiveOneHot = "13d12f88-f12b-451e-9b9f-13b97e01cc85"
@@ -9,6 +9,9 @@ Static = "aedffcd0-7271-4cad-89d0-dc628f76c6d3"
 WordTokenizers = "796a5d58-b03d-544a-977e-18100b691f6e"
 
 [compat]
+PrimitiveOneHot = "0.1"
+Static = "0.5"
+WordTokenizers = "0.5"
 julia = "1.6"
 
 [extras]
