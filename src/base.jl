@@ -19,8 +19,17 @@ SubSentence(x) = SubSentence(x, nothing)
 Word(x) = Word(x, nothing)
 Token(x) = Token(x, nothing)
 
-Base.show(io::IO, t::TokenStages) = 
-    print(io, typeof(t).name.name, ntuple(i->getfield(t, i), fieldcount(typeof(t))))
+function Base.show(io::IO, t::TokenStages)
+    print(io, typeof(t).name.name)
+    vs = filter(!isnothing, ntuple(i->getfield(t, i), fieldcount(typeof(t))))
+    if length(vs) == 1
+        print(io, '(')
+        show(io, vs[1])
+        print(io, ')')
+    else
+        print(io, vs)
+    end
+end
 
 @inline splitting(::AbstractTokenizer, ::TokenStages, x) = x
 @inline splitting(t::AbstractTokenizer, d::DocumentStage) = splitting(t, d, rulebased_split_sentences(d.x))
