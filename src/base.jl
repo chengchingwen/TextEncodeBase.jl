@@ -53,7 +53,6 @@ function Base.show(io::IO, t::TokenStages)
     end
 end
 
-abstract type AbstractTokenization end
 
 let ATR = AbstractTokenizer, AT = AbstractTokenization
     # [full dispatch, default to ignore tokenizer]
@@ -92,8 +91,48 @@ function tokenize(tkr::ATR, t::AT, x::TS) where {ATR <: AbstractTokenizer, AT <:
     return v
 end
 
-struct DefaultTokenization <: AbstractTokenization end
+"""
+    splitting(t::AbstractTokenization, x::TokenStages)
 
-tokenization(::AbstractTokenizer) = DefaultTokenization()
+Split `x` given its tokenization stage. For example,
+ the default behavior of a document stage is splitting into
+ sentences (with `WordTokenizers.split_sentences`).
 
+Overload this method for custom tokenization.
+"""
+function splitting end
+
+@eval $((@macroexpand @doc """
+    splitting(t::AbstractTokenization, s::TokenStages, x)
+
+Interface for providing callback for splitting. `x` is the result of `splitting(t, s)`.
+
+Overload this method for custom `splitting` callback.
+"""
+function splitting(::AbstractTokenization, ::TokenStages, x) end
+).args[2])
+
+"""
+    tokenize(t::AbstractTokenization, s::TokenStages, x)
+
+Mark the tokenization stage of `x`, which is part of the splitting result of `s`.
+ For example, if we are doing simple whitespace tokenization and at the sentence stage,
+ then `x` is just single word of `s` and thus return `Word(x)` (or `Token(x)`).
+ Skip if `x` is already a `TokenStages`.
+
+Overload this method to control the tokenization process.
+"""
+function tokenize end
+
+@eval $((@macroexpand @doc """
+    tokenize(t::AbstractTokenization, x::TokenStages)
+
+Tokenize `x`.
+
+Overload this method for custom tokenization and stages.
+"""
+function tokenize(t::AbstractTokenization, x::TokenStages)end
+).args[2])
+
+# tokenizer api
 (t::AbstractTokenizer)(x::TS) where {TS <: TokenStages} = tokenize(t, tokenization(t), x)

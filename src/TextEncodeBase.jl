@@ -5,60 +5,34 @@ import WordTokenizers
 """
 abstract type for tokenizers.
 
-The tokenization procedure is separate into multiple
- `TokenStages` and recursive calls of `splitting` 
- and `tokenize`. `splitting` break string into substrings,
- and `tokenize` is responsible for marking the
- `TokenStages` and do the recursive call.
+Each tokenizer is link with a tokenization (by
+ defining `tokenization(::Tokenizer) = Tokenization()`).
+ The overall framework dispatch on both tokenizer and
+ tokenization, but most of the time we only add methods
+ for tokenization. This allow better composability and
+ can interfere the tokenization process with given
+ tokenizer.
 """
 abstract type AbstractTokenizer end
+
+"""
+abstract type for tokenization.
+
+The tokenization procedure is separate into multiple
+ `TokenStages` and recursive calls of `splitting` and
+ `tokenize`. `splitting` break string into substrings,
+ and `tokenize` is responsible for marking each substring
+ with a `TokenStages` and do the tokenization.
+"""
+abstract type AbstractTokenization end
+
+struct DefaultTokenization <: AbstractTokenization end
+
+tokenization(::AbstractTokenizer) = DefaultTokenization()
 
 include("./base.jl")
 include("./indexed.jl")
 # include("./match.jl")
-
-struct NaiveTokenizer <: AbstractTokenizer end
-
-
-"""
-    splitting(tkr::AbstractTokenizer, x::TokenStages)
-
-Split `x` given its tokenization stage. For example,
- the default behavior of a document stage is splitting into
- sentences (with `WordTokenizers.split_sentences`).
-
-Overload this method for custom tokenizer.
-"""
-function splitting end
-
-@eval $((@macroexpand @doc """
-    splitting(tkr::AbstractTokenizer, s::TokenStages, x)
-
-Interface for providing callback for splitting. `x` is the result of `splitting(tkr, s)`.
-
-Overload this method for custom `splitting` callback.
-"""
-function splitting(::AbstractTokenizer, ::TokenStages, x) end
-).args[2])
-
-"""
-    tokenize(tkr::AbstractTokenizer, s::TokenStages, x)
-
-Tokenize `x`. `s` contain the parent of `x`.
-
-Overload this method when you need parent information to
- tokenize `x`.
-"""
-function tokenize end
-
-@eval $((@macroexpand @doc """
-    tokenize(tkr::AbstractTokenizer, x::TokenStages)
-
-Tokenize `x`. 
-
-Overload this method for custom tokenizer and stages.
-"""
-function tokenize(t::AT, x::TS) where {AT <: AbstractTokenizer, TS <: TokenStages} end
-).args[2])
+include("tkrs.jl")
 
 end
