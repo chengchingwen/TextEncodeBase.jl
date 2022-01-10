@@ -1,16 +1,38 @@
 using WordTokenizers: rulebased_split_sentences, nltk_word_tokenize
 
+"""
+abstract type for type that wrap input into specific stage for control tokenization.
+
+There are six builtin stages in TextEncodeBase (all abstract XStage <: TokenStages):
+
+    1. Document <: DocumentStage: the input string is a full document,
+     and thus need to be splitted into multiple sentence.
+    2. Sentence <: SentenceStage: the input string is a full string,
+     and thus need to be splitted into multiple part (SubSentence/Word/Token).
+    3. SubSentence <: SubSentenceStage: special wrapper for case where the tokenizer
+     does not directly break sentence all into words/tokens and these pieces contain
+     multiple words/tokens, but you need the information that they are not full sentence.
+    4. Word <: WordStage: the input string is a single word.
+    5. SubWord <: SubWordStage: similar to SubSentence, but for word.
+    6. Token <: TokenStage: the final piece of the tokenization process.
+     Generally, it's used to specify the end of this piece and should
+     never be splitted.
+
+Each wrapper have two field: `x` for the input, `meta` for extra information (`nothing` if not provided).
+"""
 abstract type TokenStages end
 abstract type DocumentStage    <: TokenStages end
 abstract type SentenceStage    <: TokenStages end
 abstract type SubSentenceStage <: TokenStages end
 abstract type WordStage        <: TokenStages end
+abstract type SubWordStage     <: TokenStages end
 abstract type TokenStage       <: TokenStages end
 
 struct Document{T, M}    <: DocumentStage    ; x::T; meta::M; end
 struct Sentence{T, M}    <: SentenceStage    ; x::T; meta::M; end
 struct SubSentence{T, M} <: SubSentenceStage ; x::T; meta::M; end
 struct Word{T, M}        <: WordStage        ; x::T; meta::M; end
+struct SubWord{T, M}     <: SubWordStage     ; x::T; meta::M; end
 struct Token{T, M}       <: TokenStage       ; x::T; meta::M; end
 
 Document(x) = Document(x, nothing)
@@ -43,6 +65,7 @@ end
 @inline tokenize(::AbstractTokenizer, ::TokenStages, t::TokenStage) = t
 
 @inline tokenize(::AbstractTokenizer, w::WordStage) = Token(w.x)
+@inline tokenize(::AbstractTokenizer, w::SubWordStage) = Token(w.x)
 @inline tokenize(::AbstractTokenizer, t::TokenStage) = t
 function tokenize(t::AT, x::TS) where {AT <: AbstractTokenizer, TS <: TokenStages}
     v = TokenStages[]
