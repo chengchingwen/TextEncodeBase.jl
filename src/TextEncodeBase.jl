@@ -31,6 +31,16 @@ Overload this method for custom tokenizer.
 """
 function splitting end
 
+@eval $((@macroexpand @doc """
+    splitting(tkr::AbstractTokenizer, s::TokenStages, x)
+
+Interface for providing callback for splitting. `x` is the result of `splitting(tkr, s)`.
+
+Overload this method for custom `splitting` callback.
+"""
+function splitting(::AbstractTokenizer, ::TokenStages, x) end
+).args[2])
+
 """
     tokenize(tkr::AbstractTokenizer, s::TokenStages, x)
 

@@ -22,9 +22,10 @@ Token(x) = Token(x, nothing)
 Base.show(io::IO, t::TokenStages) = 
     print(io, typeof(t).name.name, ntuple(i->getfield(t, i), fieldcount(typeof(t))))
 
-@inline splitting(::AbstractTokenizer, d::DocumentStage) = rulebased_split_sentences(d.x)
-@inline splitting(::AbstractTokenizer, s::SentenceStage) = nltk_word_tokenize(s.x)
-@inline splitting(::AbstractTokenizer, s::SubSentenceStage) = nltk_word_tokenize(s.x)
+@inline splitting(::AbstractTokenizer, ::TokenStages, x) = x
+@inline splitting(t::AbstractTokenizer, d::DocumentStage) = splitting(t, d, rulebased_split_sentences(d.x))
+@inline splitting(t::AbstractTokenizer, s::SentenceStage) = splitting(t, s, nltk_word_tokenize(s.x))
+@inline splitting(t::AbstractTokenizer, s::SubSentenceStage) = splitting(t, s, nltk_word_tokenize(s.x))
 
 @inline tokenize(t::AbstractTokenizer, ::DocumentStage, x) = tokenize(t, Sentence(x))
 @inline tokenize(t::AbstractTokenizer, ::SentenceStage, x) = tokenize(t, Token(x))

@@ -1,8 +1,6 @@
 abstract type IndexedTokenizer <: AbstractTokenizer end
 
-@inline splitting(::IndexedTokenizer, d::DocumentStage) = rulebased_split_sentences(d.x) |> enumerate
-@inline splitting(::IndexedTokenizer, s::SentenceStage) = nltk_word_tokenize(s.x) |> enumerate
-@inline splitting(::IndexedTokenizer, s::SubSentenceStage) = nltk_word_tokenize(s.x) |> enumerate
+@inline splitting(::IndexedTokenizer, ::TokenStages, x) = enumerate(x)
 
 @inline tokenize(t::IndexedTokenizer, ::DocumentStage, (i, x)) = tokenize(t, Sentence(x, (sentence_id = i,)))
 
