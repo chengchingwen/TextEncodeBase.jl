@@ -5,18 +5,18 @@ abstract type for type that wrap input into specific stage for control tokenizat
 
 There are six builtin stages in TextEncodeBase (all abstract XStage <: TokenStages):
 
-1. Document <: DocumentStage: the input string is a full document,
- and thus need to be splitted into multiple sentence.
-2. Sentence <: SentenceStage: the input string is a full string,
- and thus need to be splitted into multiple part (SubSentence/Word/Token).
-3. SubSentence <: SubSentenceStage: special wrapper for case where the tokenizer
- does not directly break sentence all into words/tokens and these pieces contain
- multiple words/tokens, but you need the information that they are not full sentence.
-4. Word <: WordStage: the input string is a single word.
-5. SubWord <: SubWordStage: similar to SubSentence, but for word.
-6. Token <: TokenStage: the final piece of the tokenization process.
- Generally, it's used to specify the end of this piece and should
- never be splitted.
+    1. Document <: DocumentStage: the input string is a full document,
+     and thus need to be splitted into multiple sentence.
+    2. Sentence <: SentenceStage: the input string is a full string,
+     and thus need to be splitted into multiple part (SubSentence/Word/Token).
+    3. SubSentence <: SubSentenceStage: special wrapper for case where the tokenizer
+     does not directly break sentence all into words/tokens and these pieces contain
+     multiple words/tokens, but you need the information that they are not full sentence.
+    4. Word <: WordStage: the input string is a single word.
+    5. SubWord <: SubWordStage: similar to SubSentence, but for word.
+    6. Token <: TokenStage: the final piece of the tokenization process.
+     Generally, it's used to specify the end of this piece and should
+     never be splitted.
 
 Each wrapper have two field: `x` for the input, `meta` for extra information (`nothing` if not provided).
 """
@@ -137,7 +137,7 @@ function splitting(::AbstractTokenization, ::TokenStages, x) end
 Mark the tokenization stage of `x`, which is part of the splitting result of `s`.
  For example, if we are doing simple whitespace tokenization and at the sentence stage,
  then `x` is just single word of `s` and thus return `Word(x)` (or `Token(x)`).
- Skip if `x` is already a `TokenStages`.
+ Skip if `x` is already a `TokenStages`. (this method only apply to splittable stages)
 
 Overload this method to control the tokenization process.
 """
@@ -146,14 +146,24 @@ function tokenize end
 @eval $((@macroexpand @doc """
     tokenize(tkr::AbstractTokenizer, t::AbstractTokenization, x::TokenStages)
 
-Tokenize `x` according to `tkr` and `t`
+Tokenize `x` according to `tkr` and `t`.
 
-Overload this method for custom tokenizer, tokenization and stages.
- Notice that there is no method for `tokenize(t, x)`, so you always
- also need to dispatch to `AbstractTokenizer`.
+Overload for custom tokenizer, tokenization and stages. For making a unsplittable
+ into splittable (or vice versa), you must overload this method.
 """
 function tokenize(tkr::AbstractTokenizer, t::AbstractTokenization, x::TokenStages) end
 ).args[2])
+
+@eval $((@macroexpand @doc """
+    tokenize(t::AbstractTokenization, x::TokenStages)
+
+A handler for unsplittable stages (token/word/...).
+
+Overload this method for custom transform.
+"""
+function tokenize(t::AbstractTokenization, x::TokenStages) end
+).args[2])
+
 
 # tokenizer api
 (t::AbstractTokenizer)(x::TS) where {TS <: TokenStages} = tokenize(t, tokenization(t), x)
