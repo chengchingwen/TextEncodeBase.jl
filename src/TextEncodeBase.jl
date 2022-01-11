@@ -9,7 +9,7 @@ Each tokenizer is link with a tokenization (by
  defining `tokenization(::Tokenizer) = Tokenization()`).
  The overall framework dispatch on both tokenizer and
  tokenization, but most of the time we only add methods
- for tokenization. This allow better composability and
+ for tokenization. This allow further composability and
  can interfere the tokenization process with given
  tokenizer.
 """

@@ -5,18 +5,18 @@ abstract type for type that wrap input into specific stage for control tokenizat
 
 There are six builtin stages in TextEncodeBase (all abstract XStage <: TokenStages):
 
-    1. Document <: DocumentStage: the input string is a full document,
-     and thus need to be splitted into multiple sentence.
-    2. Sentence <: SentenceStage: the input string is a full string,
-     and thus need to be splitted into multiple part (SubSentence/Word/Token).
-    3. SubSentence <: SubSentenceStage: special wrapper for case where the tokenizer
-     does not directly break sentence all into words/tokens and these pieces contain
-     multiple words/tokens, but you need the information that they are not full sentence.
-    4. Word <: WordStage: the input string is a single word.
-    5. SubWord <: SubWordStage: similar to SubSentence, but for word.
-    6. Token <: TokenStage: the final piece of the tokenization process.
-     Generally, it's used to specify the end of this piece and should
-     never be splitted.
+1. Document <: DocumentStage: the input string is a full document,
+ and thus need to be splitted into multiple sentence.
+2. Sentence <: SentenceStage: the input string is a full string,
+ and thus need to be splitted into multiple part (SubSentence/Word/Token).
+3. SubSentence <: SubSentenceStage: special wrapper for case where the tokenizer
+ does not directly break sentence all into words/tokens and these pieces contain
+ multiple words/tokens, but you need the information that they are not full sentence.
+4. Word <: WordStage: the input string is a single word.
+5. SubWord <: SubWordStage: similar to SubSentence, but for word.
+6. Token <: TokenStage: the final piece of the tokenization process.
+ Generally, it's used to specify the end of this piece and should
+ never be splitted.
 
 Each wrapper have two field: `x` for the input, `meta` for extra information (`nothing` if not provided).
 """
@@ -72,16 +72,23 @@ let ATR = AbstractTokenizer, AT = AbstractTokenization
     global @inline tokenize(::AT, ::SentenceStage, x) = Token(x)
     # [tokenization dispatch] skip if splitting result is already wrapped
     global @inline tokenize(::AT, ::TokenStages, x::TokenStages) = x
+
     # [full dispatch, default to ignore tokenizer] the outer-most api, but these stages are usually unsplittable
-    global @inline tokenize(::ATR, t::AT, x::Union{WordStage, SubWordStage, TokenStage}) = tokenize(t, x)
-    # [tokenization dispatch] default tokenization for these stages
-    global @inline tokenize(::AT, w::WordStage)    = [Token(w.x)]
-    global @inline tokenize(::AT, w::SubWordStage) = [Token(w.x)]
-    global @inline tokenize(::AT, t::TokenStage)   = [t]
+    global @inline tokenize(::ATR, ::AT, w::WordStage)    = [Token(w.x)]
+    global @inline tokenize(::ATR, ::AT, w::SubWordStage) = [Token(w.x)]
+    global @inline tokenize(::ATR, ::AT, t::TokenStage)   = [t]
+    # [full dispatch] the outer-most api, splitting input and recursively tokenize the result. ignore if input is empty
+    global @inline tokenize(tkr::ATR, t::AT, x::TokenStages) = tokenize_procedure(tkr, t, x)
 end
 
-# [full dispatch] the outer-most api, splitting input and recursively tokenize the result. ignore if input is empty
-function tokenize(tkr::ATR, t::AT, x::TS) where {ATR <: AbstractTokenizer, AT <: AbstractTokenization, TS <: TokenStages}
+"""
+    tokenization_procedure(tokenizer, tokenizaton, stage)
+
+The procedure of tokenization (`splitting` + `tokenize`).
+ This is use to restore full behavior for stage that default
+ unsplittable. Generally don't overload this function.
+"""
+function tokenize_procedure(tkr, t, x)
     v = TokenStage[]
     isempty(x.x) && return v
     for sp in splitting(tkr, t, x, splitting(tkr, t, x))
@@ -90,6 +97,7 @@ function tokenize(tkr::ATR, t::AT, x::TS) where {ATR <: AbstractTokenizer, AT <:
     end
     return v
 end
+
 
 """
     splitting(t::AbstractTokenization, x::TokenStages)
@@ -125,13 +133,15 @@ Overload this method to control the tokenization process.
 function tokenize end
 
 @eval $((@macroexpand @doc """
-    tokenize(t::AbstractTokenization, x::TokenStages)
+    tokenize(tkr::AbstractTokenizer, t::AbstractTokenization, x::TokenStages)
 
-Tokenize `x`.
+Tokenize `x` according to `tkr` and `t`
 
-Overload this method for custom tokenization and stages.
+Overload this method for custom tokenizer, tokenization and stages.
+ Notice that there is no method for `tokenize(t, x)`, so you always
+ also need to dispatch to `AbstractTokenizer`.
 """
-function tokenize(t::AbstractTokenization, x::TokenStages)end
+function tokenize(tkr::AbstractTokenizer, t::AbstractTokenization, x::TokenStages) end
 ).args[2])
 
 # tokenizer api
