@@ -30,9 +30,10 @@ struct DefaultTokenization <: AbstractTokenization end
 
 tokenization(::AbstractTokenizer) = DefaultTokenization()
 
+include("./utils.jl")
 include("./base.jl")
 include("./indexed.jl")
-# include("./match.jl")
-include("tkrs.jl")
+include("./match.jl")
+include("./tkrs.jl")
 
 end

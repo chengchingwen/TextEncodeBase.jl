@@ -39,7 +39,15 @@ Document(x) = Document(x, nothing)
 Sentence(x) = Sentence(x, nothing)
 SubSentence(x) = SubSentence(x, nothing)
 Word(x) = Word(x, nothing)
+SubWord(x) = SubWord(x, nothing)
 Token(x) = Token(x, nothing)
+
+updatemeta(x::Document, meta) = Document(x.x, meta)
+updatemeta(x::Sentence, meta) = Sentence(x.x, meta)
+updatemeta(x::SubSentence, meta) = SubSentence(x.x, meta)
+updatemeta(x::Word, meta) = Word(x.x, meta)
+updatemeta(x::SubWord, meta) = SubWord(x.x, meta)
+updatemeta(x::Token, meta) = Token(x.x, meta)
 
 function Base.show(io::IO, t::TokenStages)
     print(io, typeof(t).name.name)
@@ -70,13 +78,16 @@ let ATR = AbstractTokenizer, AT = AbstractTokenization
     # [tokenization dispatch] default behavior on specific stages, mark the splitting result for further tokenization
     global @inline tokenize(::AT, ::DocumentStage, x) = Sentence(x)
     global @inline tokenize(::AT, ::SentenceStage, x) = Token(x)
-    # [tokenization dispatch] skip if splitting result is already wrapped
+    global @inline tokenize(::AT, ::SubSentenceStage, x) = Token(x)
+    # [tokenization dispatch] default skip if splitting result is already wrapped
     global @inline tokenize(::AT, ::TokenStages, x::TokenStages) = x
 
     # [full dispatch, default to ignore tokenizer] the outer-most api, but these stages are usually unsplittable
-    global @inline tokenize(::ATR, ::AT, w::WordStage)    = [Token(w.x)]
-    global @inline tokenize(::ATR, ::AT, w::SubWordStage) = [Token(w.x)]
-    global @inline tokenize(::ATR, ::AT, t::TokenStage)   = [t]
+    global @inline tokenize(tkr::ATR, t::AT, s::Union{WordStage, SubWordStage, TokenStage}) = tokenize(t, s)
+    # [tokenization dispatch] default behavior of unspplittable type
+    global @inline tokenize(::AT, w::WordStage)    = [Token(w.x)]
+    global @inline tokenize(::AT, w::SubWordStage) = [Token(w.x)]
+    global @inline tokenize(::AT, t::TokenStage)   = [t]
     # [full dispatch] the outer-most api, splitting input and recursively tokenize the result. ignore if input is empty
     global @inline tokenize(tkr::ATR, t::AT, x::TokenStages) = tokenize_procedure(tkr, t, x)
 end
