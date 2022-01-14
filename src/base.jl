@@ -42,12 +42,15 @@ Word(x) = Word(x, nothing)
 SubWord(x) = SubWord(x, nothing)
 Token(x) = Token(x, nothing)
 
-updatemeta(x::Document, meta) = Document(x.x, meta)
-updatemeta(x::Sentence, meta) = Sentence(x.x, meta)
-updatemeta(x::SubSentence, meta) = SubSentence(x.x, meta)
-updatemeta(x::Word, meta) = Word(x.x, meta)
-updatemeta(x::SubWord, meta) = SubWord(x.x, meta)
-updatemeta(x::Token, meta) = Token(x.x, meta)
+setmeta(x::Document, meta) = Document(x.x, meta)
+setmeta(x::Sentence, meta) = Sentence(x.x, meta)
+setmeta(x::SubSentence, meta) = SubSentence(x.x, meta)
+setmeta(x::Word, meta) = Word(x.x, meta)
+setmeta(x::SubWord, meta) = SubWord(x.x, meta)
+setmeta(x::Token, meta) = Token(x.x, meta)
+
+updatemeta(::Nothing, meta) = meta
+updatemeta(a::NamedTuple, meta::NamedTuple) = merge(a, meta)
 
 function Base.show(io::IO, t::TokenStages)
     print(io, typeof(t).name.name)
@@ -76,17 +79,17 @@ let ATR = AbstractTokenizer, AT = AbstractTokenization
     # [full dispatch, default to ignore tokenizer]
     global @inline tokenize(tkr::ATR, t::AT, s::TokenStages, x) = tokenize(t, s, x)
     # [tokenization dispatch] default behavior on specific stages, mark the splitting result for further tokenization
-    global @inline tokenize(::AT, ::DocumentStage, x) = Sentence(x)
-    global @inline tokenize(::AT, ::SentenceStage, x) = Token(x)
-    global @inline tokenize(::AT, ::SubSentenceStage, x) = Token(x)
+    global @inline tokenize(::AT, d::DocumentStage, x) = Sentence(x, d.meta)
+    global @inline tokenize(::AT, s::SentenceStage, x) = Word(x, s.meta)
+    global @inline tokenize(::AT, s::SubSentenceStage, x) = Word(x, s.meta)
     # [tokenization dispatch] default skip if splitting result is already wrapped
     global @inline tokenize(::AT, ::TokenStages, x::TokenStages) = x
 
     # [full dispatch, default to ignore tokenizer] the outer-most api, but these stages are usually unsplittable
     global @inline tokenize(tkr::ATR, t::AT, s::Union{WordStage, SubWordStage, TokenStage}) = tokenize(t, s)
     # [tokenization dispatch] default behavior of unspplittable type
-    global @inline tokenize(::AT, w::WordStage)    = [Token(w.x)]
-    global @inline tokenize(::AT, w::SubWordStage) = [Token(w.x)]
+    global @inline tokenize(t::AT, w::WordStage)    = tokenize(t, Token(w.x, w.meta))
+    global @inline tokenize(t::AT, w::SubWordStage) = tokenize(t, Token(w.x, w.meta))
     global @inline tokenize(::AT, t::TokenStage)   = [t]
     # [full dispatch] the outer-most api, splitting input and recursively tokenize the result. ignore if input is empty
     global @inline tokenize(tkr::ATR, t::AT, x::TokenStages) = tokenize_procedure(tkr, t, x)
