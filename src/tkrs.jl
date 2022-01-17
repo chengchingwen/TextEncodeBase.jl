@@ -20,5 +20,11 @@ tokenization(tkr::NaiveMatchTokenizer) = MatchTokenization(tkr.patterns)
 struct NaiveIndexedMatchTokenizer <: AbstractTokenizer
     patterns::Vector{Regex}
 end
-tokenization(tkr::NaiveIndexedMatchTokenizer) = IndexedMatchTokenization(tkr.patterns)
+tokenization(tkr::NaiveIndexedMatchTokenizer) = IndexedTokenization()
 
+splitting(tkr::NaiveIndexedMatchTokenizer, ::IndexedTokenization, s::SentenceStage) = splitting(tkr, MatchTokenization(tkr.patterns), s)
+
+function tokenize(tkr::NaiveIndexedMatchTokenizer, t::IndexedTokenization, s::SentenceStage, (i, x))
+    y = tokenize(tkr, MatchTokenization(tkr.patterns), s, x)
+    return setmeta(y, updatemeta(getmeta(y), (offsets = i,)))
+end
