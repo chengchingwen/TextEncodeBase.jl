@@ -1,7 +1,7 @@
 name = "TextEncodeBase"
 uuid = "f92c20c0-9f2a-4705-8116-881385faba05"
 authors = ["chengchingwen <adgjl5645@hotmail.com> and contributors"]
-version = "0.0.1"
+version = "0.0.2"
 
 [deps]
 PrimitiveOneHot = "13d12f88-f12b-451e-9b9f-13b97e01cc85"
