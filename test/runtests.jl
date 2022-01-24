@@ -1,10 +1,14 @@
 using TextEncodeBase
 using Test
 
-using TextEncodeBase: Document, Sentence, Word, Token
-using TextEncodeBase: getmeta
+using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
+    TokenStages, Document, Sentence, Word, Token
+using TextEncodeBase: getvalue, getmeta
 
 using WordTokenizers
+
+const ATR = AbstractTokenizer
+const AT = AbstractTokenization
 
 @testset "TextEncodeBase.jl" begin
 
@@ -45,23 +49,23 @@ using WordTokenizers
 
     @testset "match tokenizer" begin
         tkr = TextEncodeBase.NaiveMatchTokenizer([r"\d", r"en"])
-        @test map(x->x.x, tkr(document)) == [
+        @test map(getvalue, tkr(document)) == [
             "This", "is", "the", "first", "s",
             "en", "t", "en", "ce", ".", "And",
             "the", "second", "one", "with", "some",
             "number", "1", "2", "3", "4", "5", ".",
         ]
-        @test map(x->x.x, tkr(sentence)) == [
+        @test map(getvalue, tkr(sentence)) == [
             "A", "single", "s", "en", "t", "en",
             "ce", "with", "3", "1", "char", ".",
         ]
-        @test map(x->x.x, tkr(word)) == [word.x]
-        @test map(x->x.x, tkr(Word("123"))) == ["1", "2", "3"]
+        @test map(getvalue, tkr(word)) == [word.x]
+        @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
     end
 
     @testset "indexed match tokenizer" begin
         tkr = TextEncodeBase.NaiveIndexedMatchTokenizer([r"\d", r"en"])
-        @test map(x->x.x, tkr(document)) == [
+        @test map(getvalue, tkr(document)) == [
             "This", "is", "the", "first", "s",
             "en", "t", "en", "ce", ".", "And",
             "the", "second", "one", "with", "some",
@@ -73,16 +77,84 @@ using WordTokenizers
             map(NamedTuple{(:sentence_id, :word_id, :token_id)}, zip(s, w, w))
         end
 
-        @test map(x->x.x, tkr(sentence)) == [
+        @test map(getvalue, tkr(sentence)) == [
             "A", "single", "s", "en", "t", "en",
             "ce", "with", "3", "1", "char", ".",
         ]
         @test map(getmeta, tkr(sentence)) == map(NamedTuple{(:word_id, :token_id)}, zip(1:12, 1:12))
-
-        @test map(x->x.x, tkr(word)) == [word.x]
+        @test map(getvalue, tkr(word)) == [word.x]
         @test map(getmeta, tkr(word)) == [(word_id = 1, token_id = 1)]
-        @test map(x->x.x, tkr(Word("123"))) == ["1", "2", "3"]
+        @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
         @test map(getmeta, tkr(Word("123"))) == map(NamedTuple{(:word_id, :token_id)}, zip(1:3, 1:3))
     end
 
+    @testset "nested output" begin
+        struct NestedTkr <: ATR end
+        TextEncodeBase.tokenization(::NestedTkr) = TextEncodeBase.IndexedTokenization()
+        TextEncodeBase.tokenize(tkr::NestedTkr, t::AT, x::Document) = TextEncodeBase.tokenize_procedure!(push!, Vector[], tkr, t, x)
+        TextEncodeBase.tokenize(tkr::NestedTkr, t::AT, ::Nothing, x::Sentence) = [TextEncodeBase.tokenize_procedure(tkr, t, x)]
+
+        tkr = NestedTkr()
+        @test tkr(document) == begin
+            sentences = split_sentences(document.x)
+            words = map(x->nltk_word_tokenize(x), sentences)
+            tokens = []
+            for (i, s) in enumerate(words)
+                push!(tokens, map(enumerate(s)) do (j, w)
+                    Token(w, (sentence_id = i, word_id = j, token_id = j))
+                end)
+            end
+            tokens
+        end
+        @test tkr(sentence) == begin
+            words = nltk_word_tokenize(sentence.x)
+            tokens = [map(enumerate(words)) do (i, w)
+                Token(w, (word_id = i, token_id = i))
+            end]
+            tokens
+        end
+        @test tkr(word) == [Token(word.x, (word_id = 1, token_id  = 1))]
+    end
+
+    @testset "indexed char" begin
+        struct CharTkr <: ATR end
+        TextEncodeBase.tokenization(::CharTkr) = TextEncodeBase.IndexedTokenization()
+        TextEncodeBase.splitting(::CharTkr, t::AT, x::Word) = split(x.x, "")
+        TextEncodeBase.tokenize(tkr::CharTkr, t::AT, x::Word) = TextEncodeBase.tokenize_procedure(tkr, t, x)
+
+        tkr = CharTkr()
+        @test tkr(document) == begin
+            sentences = split_sentences(document.x)
+            words = map(x->nltk_word_tokenize(x), sentences)
+            tokens = Token[]
+            for (i, s) in enumerate(words)
+                k = 1
+                for (j, w) in enumerate(s)
+                    for c in split(w, "")
+                        push!(tokens, Token(c, (sentence_id = i, word_id = j, token_id = k)))
+                        k += 1
+                    end
+                end
+            end
+            tokens
+        end
+        @test tkr(sentence) == begin
+            words = nltk_word_tokenize(sentence.x)
+            tokens = Token[]
+            for (i, w) in enumerate(words)
+                for c in split(w, "")
+                    push!(tokens, Token(c, (word_id = i, token_id = length(tokens)+1)))
+                end
+            end
+            tokens
+        end
+        @test tkr(word) == begin
+            chars = split(word.x, "")
+            tokens = Token[]
+            for (i, c) in enumerate(chars)
+                push!(tokens, Token(c, (word_id = 1, token_id = i)))
+            end
+            tokens
+        end
+    end
 end
