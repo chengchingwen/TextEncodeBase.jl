@@ -3,6 +3,8 @@ struct MixedTokenization{T <:Tuple} <: AbstractTokenization
 end
 MixedTokenization(ts...) = MixedTokenization(ts)
 
+Base.getindex(t::MixedTokenization, i) = t.ts[i]
+
 "tokenizer that run the default behavior"
 struct NaiveTokenizer <: AbstractTokenizer end
 
@@ -24,7 +26,16 @@ tokenization(tkr::NaiveIndexedMatchTokenizer) = IndexedTokenization()
 
 splitting(tkr::NaiveIndexedMatchTokenizer, ::IndexedTokenization, s::SentenceStage) = splitting(tkr, MatchTokenization(tkr.patterns), s)
 
-function tokenize(tkr::NaiveIndexedMatchTokenizer, t::IndexedTokenization, s::SentenceStage, (i, x))
-    y = tokenize(tkr, MatchTokenization(tkr.patterns), s, x)
-    return setmeta(y, updatemeta(getmeta(y), (offsets = i,)))
+wrap(tkr::NaiveIndexedMatchTokenizer, t::IndexedTokenization, s::SentenceStage, (i, x)) = updatemeta(wrap(tkr, MatchTokenization(tkr.patterns), s, x), (offsets = i,))
+
+tokenize(tkr::NaiveIndexedMatchTokenizer, t::IndexedTokenization, ::Nothing, w::WordStage) = tokenize(tkr, MatchTokenization(tkr.patterns), nothing, w)
+
+splitting(tkr::NaiveIndexedMatchTokenizer, ::MatchTokenization, w::WordStage, x) = splitting(tkr, IndexedTokenization(), w, x)
+
+wrap(tkr::NaiveIndexedMatchTokenizer, t::MatchTokenization, w::WordStage, (i, x)) = updatemeta(wrap(t, w, x), (offsets = i,))
+
+function wrap(tkr::NaiveIndexedMatchTokenizer, t::MatchTokenization, w::TokenStage)
+    y = wrap(tkr, IndexedTokenization(), w)
+    word_id = getmeta(y).word_id - 1
+    return updatemeta(y, (word_id = word_id,))
 end

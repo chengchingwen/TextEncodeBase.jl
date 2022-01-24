@@ -9,20 +9,19 @@ struct IndexedTokenization <: AbstractTokenization end
 
 _offsets(s) = (meta = getmeta(s); hasmeta(s) && haskey(getmeta(s), :offsets) ? meta.offsets : Offsets(0,0))
 
-@inline splitting(::IndexedTokenization, ::TokenStages, x) = enumerate(x)
-@inline splitting(::IndexedTokenization, ::SentenceStage, x) = zip(repeated(Offsets(0,0)), x)
-@inline splitting(::IndexedTokenization, s::SubSentenceStage, x) = zip(repeated(_offsets(s)), x)
+@inline splitting(::IndexedTokenization, s::TokenStages, x) = zip(repeated(_offsets(s)), x)
+@inline splitting(::IndexedTokenization, ::DocumentStage, x) = enumerate(x)
 function splitting(::IndexedTokenization, w::WordStage, x)
     offsets = _offsets(w)
     offsets.word += 1
     return zip(repeated(offsets), x)
 end
 
-@inline tokenize(::IndexedTokenization, d::DocumentStage, (i, x)) = Sentence(x, updatemeta(getmeta(d), (sentence_id = i,)))
-@inline tokenize(::IndexedTokenization, s::SubSentenceStage, (i, x)) = Word(x, updatemeta(getmeta(s), (offsets = i,)))
-@inline tokenize(::IndexedTokenization, s::SentenceStage, (i, x)) = Word(x, updatemeta(getmeta(s), (offsets = i,)))
+@inline wrap(::IndexedTokenization, d::DocumentStage, (i, x)) = Sentence(x, updatemeta(getmeta(d), (sentence_id = i,)))
+@inline wrap(::IndexedTokenization, s::SubSentenceStage, (i, x)) = Word(x, updatemeta(getmeta(s), (offsets = i,)))
+@inline wrap(::IndexedTokenization, s::SentenceStage, (i, x)) = Word(x, updatemeta(getmeta(s), (offsets = i,)))
 
-function tokenize(::IndexedTokenization, w::WordStage, (i, x))
+function wrap(::IndexedTokenization, w::WordStage, (i, x))
     meta = getmeta(w)
     if hasmeta(w) && haskey(meta, :offsets)
         offsets = meta.offsets
@@ -33,7 +32,7 @@ function tokenize(::IndexedTokenization, w::WordStage, (i, x))
     return SubWord(x, updatemeta(getmeta(w), (word_id = word_id, offsets = i,)))
 end
 
-function tokenize(::IndexedTokenization, w::WordStage)
+function wrap(::IndexedTokenization, w::WordStage)
     meta = getmeta(w)
     if hasmeta(w) && haskey(meta, :offsets)
         offsets = meta.offsets
@@ -44,7 +43,7 @@ function tokenize(::IndexedTokenization, w::WordStage)
     return Token(getvalue(w), updatemeta(meta, (word_id = word_id,)))
 end
 
-function tokenize(::IndexedTokenization, x::TokenStage)
+function wrap(::IndexedTokenization, x::TokenStage)
     meta = getmeta(x)
     if hasmeta(x) && haskey(meta, :offsets)
         offsets = meta.offsets

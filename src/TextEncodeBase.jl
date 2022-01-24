@@ -19,10 +19,10 @@ abstract type AbstractTokenizer end
 abstract type for tokenization.
 
 The tokenization procedure is separate into multiple
- `TokenStages` and recursive calls of `splitting` and
- `tokenize`. `splitting` break string into substrings,
- and `tokenize` is responsible for marking each substring
- with a `TokenStages` and do the tokenization.
+ `TokenStages` and recursive calls of `splitting`, `wrap`,
+ and `tokenize`. `splitting` break string into substrings,
+ `wrap` mark the substrings with new `TokenStages`, and
+ `tokenize` is responsible for the tokenization.
 """
 abstract type AbstractTokenization end
 
