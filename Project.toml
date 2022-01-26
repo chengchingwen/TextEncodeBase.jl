@@ -1,7 +1,7 @@
 name = "TextEncodeBase"
 uuid = "f92c20c0-9f2a-4705-8116-881385faba05"
 authors = ["chengchingwen <adgjl5645@hotmail.com> and contributors"]
-version = "0.0.2"
+version = "0.0.3"
 
 [deps]
 PartialFunctions = "570af359-4316-4cb7-8c74-252c00c2016b"
