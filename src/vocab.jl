@@ -34,9 +34,26 @@ lookup(v::Vocab, is::AbstractArray) = map(lookup(v), is)
 
 lookup(::Type{OneHot}, v::Vocab) = lookup $ OneHot $ v
 lookup(::Type{OneHot}, v::Vocab, i) = OneHot(length(v))(lookup(v, i))
-lookup(T::Type{OneHot}, v::Vocab, i, j, k...) = OneHotArray(collect((lookup(T, v, i), lookup(T, v, i), map(lookup(T, v), k)...)))
 lookup(T::Type{OneHot}, v::Vocab, is::AbstractArray) = OneHotArray(map(lookup(T, v), is))
-lookup(::Type{OneHot}, v::Vocab, i::Integer) = error("cannot convert `lookup(::Vocab, $i)` = $(repr(lookup(v, i))) into one-hot representation.")
+
+function lookup(T::Type{OneHot}, v::Vocab, i, j, k...)
+    c = 0
+    si = lookup(T, v, i)
+    c += si isa OneHot ? 1 : length(parent(si))
+    sj = lookup(T, v, j)
+    c += sj isa OneHot ? 1 : length(parent(sj))
+    sk = map(lookup(T, v), k)
+    c += sum(k->k isa OneHot ? 1 : length(parent(k)), sk; init=0)
+    arr = Vector{OneHot(length(v))}(undef, c); empty!(arr)
+    si isa OneHot ? push!(arr, si) : append!(arr, parent(si))
+    sj isa OneHot ? push!(arr, sj) : append!(arr, parent(sj))
+    for k in sk
+        k isa OneHot ? push!(arr, k) : append!(arr, parent(k))
+    end
+    return OneHotArray(arr)
+end
+
+lookup(::Type{OneHot}, v::Vocab, i::Integer) = (s = lookup(v, i); throw(DomainError(s, "cannot convert `lookup(::Vocab, $i)` = $(repr(s)) into one-hot representation.")))
 
 lookup(v::Vocab, i::OneHot) = lookup(v, Int(i))
 lookup(v::Vocab, i::OneHotArray) = lookup(v, reinterpret(UInt32, i))
