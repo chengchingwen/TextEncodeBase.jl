@@ -12,6 +12,9 @@ An api for encoding text, built on top of [WordTokenizers.jl](https://github.com
 
 # Usages
 
+Here are some explanation and examples for using `TextEncodeBase.jl`, you can also find other information
+ from the [docs](https://chengchingwen.github.io/TextEncodeBase.jl/dev) or [test](/test/runtests.jl)
+
 ## Vocabulary
 
 The vocabulary part contains only two api, the `Vocab` struct and the `lookup` function.
@@ -81,3 +84,18 @@ julia> lookup(vocab, oha)
 
 ```
 
+## Tokenizer
+
+The tokenizer part is built ontop of `WordTokenizers.jl` and provide a high-level api
+ to control/augment the tokenization. There're some differences between `WordTokenizers.jl`.
+ `WordTokenizers.jl` provides a set of tokenizers and a low-level api (`TokenBuffer`) for define
+ custom tokenizers. It's mainly focus on how to split a setnece into tokens. We, on the other hand,
+ focus on how to combine different tokenizer or include other information during the tokenization.
+ For example, sometimes you might want to prevent urls from being splited or add an extra tag to it,
+ these can be done by defining a custom `AbstractTokenizer` and overload some methods. Besides, we
+ force the user to explicit wrap the input as one of the stages (`Document`/`Sentence`/`Word`/...),
+ so no confusion.
+
+## TextEncoder
+
+The text encoder is just a combination of vocabulary and tokenizer.
