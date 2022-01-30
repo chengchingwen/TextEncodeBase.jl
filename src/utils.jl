@@ -174,12 +174,11 @@ end
 nestedmaxlength(x::AbstractArray{<:AbstractArray}) = mapfoldl(nestedmaxlength, max, x)
 nestedmaxlength(x::AbstractArray) = length(x)
 
-_checkeq(x, y, msg) = x == y ? x : error(msg, ": $x != $y")
-_checkeq(msg) = FixRest(_checkeq, msg)
+_checkeqsize(x, y) = x == y ? x : throw(DimensionMismatch("nested size not the same: $x != $y"))
 
 function nestedsize(x::AbstractArray{<:AbstractArray})
     dim = size(x)
-    return (mapfoldl(nestedsize, _checkeq("nested size not the same"), x)..., dim...)
+    return (mapfoldl(nestedsize, _checkeqsize, x)..., dim...)
 end
 nestedsize(x::AbstractArray) = size(x)
 

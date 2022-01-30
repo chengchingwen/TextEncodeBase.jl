@@ -3,7 +3,7 @@ using Test
 
 using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     TokenStages, Document, Sentence, Word, Token
-using TextEncodeBase: getvalue, getmeta
+using TextEncodeBase: getvalue, getmeta, with_head_tail, trunc_and_pad, nested2batch
 
 using WordTokenizers
 
@@ -218,6 +218,74 @@ const AT = AbstractTokenization
             @test lookup(vocab, OneHot(5, 4)) == "[UNK]"
             @test lookup(vocab, OneHotArray(3, [1,2,3,0])) == ["a", "b", "c", "[UNK]"]
             @test lookup(vocab, OneHotArray(3, [1 2 3; 3 0 1])) == ["a" "b" "c"; "c" "[UNK]" "a"]
+        end
+    end
+
+    @testset "Utils" begin
+        @testset "with_head_tail" begin
+            x = collect(1:5)
+            @test with_head_tail(x, 0, 6) == collect(0:6)
+            @test with_head_tail(x, nothing, 6) == collect(1:6)
+            @test with_head_tail(x, 0, nothing) == collect(0:5)
+            @test with_head_tail(x, nothing, nothing) == x
+            @test with_head_tail(0, 6)(x) == collect(0:6)
+            @test with_head_tail(nothing, 6)(x) == collect(1:6)
+            @test with_head_tail(0, nothing)(x) == collect(0:5)
+            @test with_head_tail(nothing, nothing)(x) == x
+
+            @test with_head_tail(x; head=0, tail=6) == collect(0:6)
+            @test with_head_tail(x, tail=6) == collect(1:6)
+            @test with_head_tail(x, head=0) == collect(0:5)
+            @test with_head_tail(head=0, tail=6)(x) == collect(0:6)
+            @test with_head_tail(tail=6)(x) == collect(1:6)
+            @test with_head_tail(head=0)(x) == collect(0:5)
+
+            @test with_head_tail([[x], 1:5, 2:3], -1, -2) == [[[-1;x;-2]], [-1; 1:5; -2], [-1; 2:3; -2]]
+        end
+
+        @testset "trunc_and_pad" begin
+            x = collect(1:9)
+            @test trunc_and_pad(x, 5, 0) == collect(1:5)
+            @test trunc_and_pad(1:3, 5, 0) == [1:3; 0; 0]
+            @test trunc_and_pad(x, nothing, 0) == collect(1:9)
+            @test trunc_and_pad(1:3, nothing, 0) == collect(1:3)
+
+            @test trunc_and_pad(5, 0)(x) == collect(1:5)
+            @test trunc_and_pad(5, 0)(1:3) == [1:3; 0; 0]
+            @test trunc_and_pad(nothing, 0)(x) == collect(1:9)
+            @test trunc_and_pad(nothing, 0)(1:3) == collect(1:3)
+
+            @test trunc_and_pad([[x], 1:5, 2:3], 7, -1) == [[collect(1:7)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
+            @test trunc_and_pad([[x], 1:5, 2:3], nothing, -1) == [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
+        end
+
+        @testset "nested2batch" begin
+            x = randn(5,4,3,2)
+            x_slices = [x[i:i+5-1] for i in 1:5:length(x)]
+            y = [[[x_slices[1],x_slices[2],x_slices[3],x_slices[4]],
+                  [x_slices[5],x_slices[6],x_slices[7],x_slices[8]],
+                  [x_slices[9],x_slices[10],x_slices[11],x_slices[12]],],
+                 [[x_slices[13],x_slices[14],x_slices[15],x_slices[16]],
+                  [x_slices[17],x_slices[18],x_slices[19],x_slices[20]],
+                  [x_slices[21],x_slices[22],x_slices[23],x_slices[24]],]]
+            y2 = [[cat(x_slices[1],x_slices[2],x_slices[3],x_slices[4], dims=2),
+                   cat(x_slices[5],x_slices[6],x_slices[7],x_slices[8], dims=2),
+                   cat(x_slices[9],x_slices[10],x_slices[11],x_slices[12], dims=2),],
+                  [cat(x_slices[13],x_slices[14],x_slices[15],x_slices[16], dims=2),
+                   cat(x_slices[17],x_slices[18],x_slices[19],x_slices[20], dims=2),
+                   cat(x_slices[21],x_slices[22],x_slices[23],x_slices[24], dims=2),]]
+            y3 = [cat(cat(x_slices[1],x_slices[2],x_slices[3],x_slices[4], dims=2),
+                      cat(x_slices[5],x_slices[6],x_slices[7],x_slices[8], dims=2),
+                      cat(x_slices[9],x_slices[10],x_slices[11],x_slices[12], dims=2), dims=3),
+                  cat(cat(x_slices[13],x_slices[14],x_slices[15],x_slices[16], dims=2),
+                      cat(x_slices[17],x_slices[18],x_slices[19],x_slices[20], dims=2),
+                      cat(x_slices[21],x_slices[22],x_slices[23],x_slices[24], dims=2), dims=3)]
+
+            @test nested2batch(y) == x
+            @test nested2batch(y2) == x
+            @test nested2batch(y3) == x
+
+            @test_throws DimensionMismatch nested2batch([[1:5], 2:6])
         end
     end
 end
