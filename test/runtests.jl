@@ -204,6 +204,7 @@ const AT = AbstractTokenization
             @test lookup(OneHot, vocab, "A") == OneHot(3, 0)
             @test lookup(OneHot, vocab, "a", "b", "c", "d") == OneHotArray(3, [1,2,3,0])
             @test lookup(OneHot, vocab, ["a", "b", "c", "d"]) == OneHotArray(3, [1,2,3,0])
+            @test lookup(OneHot, vocab, ["a" "b"; "c" "d"]) == OneHotArray(3, [1 2; 3 0])
             @test lookup(OneHot, vocab, ["a", "b"], ["c", "d"]) == OneHotArray(3, [1,2,3,0])
             @test lookup(OneHot, vocab, ["a"], "b", ["c", "d"], "z") == OneHotArray(3, [1,2,3,0,0])
 
