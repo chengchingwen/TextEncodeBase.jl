@@ -77,9 +77,17 @@ setmeta(x::Word, meta) = Word(x.x, meta)
 setmeta(x::SubWord, meta) = SubWord(x.x, meta)
 setmeta(x::Token, meta) = Token(x.x, meta)
 
+setvalue(x::Document, y) = Document(y, x.meta)
+setvalue(x::Sentence, y) = Sentence(y, x.meta)
+setvalue(x::SubSentence, y) = SubSentence(y, x.meta)
+setvalue(x::Word, y) = Word(y, x.meta)
+setvalue(x::SubWord, y) = SubWord(y, x.meta)
+setvalue(x::Token, y) = Token(y, x.meta)
+
 updatemeta(::Nothing, meta) = meta
 updatemeta(a::NamedTuple, meta::NamedTuple) = merge(a, meta)
 
+updatevalue(f, x::TokenStages) = setvalue(x, f(getvalue(x)))
 updatemeta(x::TokenStages, meta) = setmeta(x, updatemeta(getmeta(x), meta))
 
 function Base.show(io::IO, t::TokenStages)
@@ -214,5 +222,8 @@ Return the tokenization type of given tokenizer.
 """
 tokenization(::AbstractTokenizer) = DefaultTokenization()
 
+preprocess(t::AbstractTokenizer, x::TokenStages) = updatevalue(Base.Fix1(preprocess, t), x)
+preprocess(t::AbstractTokenizer, x) = x
 
-(t::AbstractTokenizer)(x::TS) where {TS <: TokenStages} = tokenize(t, tokenization(t), nothing, x)
+(t::AbstractTokenizer)(x::TS) where {TS <: TokenStages} = tokenize(t, tokenization(t), nothing, preprocess(t, x))
+
