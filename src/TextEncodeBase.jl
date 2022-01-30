@@ -20,4 +20,9 @@ export Vocab, lookup, OneHot, OneHotArray
 
 include("./vocab.jl")
 
+# encode
+export AbstractTextEncoder, TextEncoder
+
+include("./encode.jl")
+
 end
