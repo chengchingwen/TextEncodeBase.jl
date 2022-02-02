@@ -222,6 +222,11 @@ Return the tokenization type of given tokenizer.
 """
 tokenization(::AbstractTokenizer) = DefaultTokenization()
 
+"""
+    preprocess(tkr::AbstractTokenizer, x)
+
+Preprocess the input `x`. This is only called during `tkr(x)`.
+"""
 preprocess(t::AbstractTokenizer, x::TokenStages) = updatevalue(Base.Fix1(preprocess, t), x)
 preprocess(t::AbstractTokenizer, x) = x
 

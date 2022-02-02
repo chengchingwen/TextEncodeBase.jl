@@ -88,13 +88,23 @@ const AT = AbstractTokenization
             @test map(getmeta, tkr(Word("123"))) == map(NamedTuple{(:word_id, :token_id)}, zip(1:3, 1:3))
         end
 
-        @testset "nested output" begin
-            struct NestedTkr <: ATR end
-            TextEncodeBase.tokenization(::NestedTkr) = TextEncodeBase.IndexedTokenization()
-            TextEncodeBase.tokenize(tkr::NestedTkr, t::AT, x::Document) = TextEncodeBase.tokenize_procedure!(push!, Vector[], tkr, t, x)
-            TextEncodeBase.tokenize(tkr::NestedTkr, t::AT, ::Nothing, x::Sentence) = [TextEncodeBase.tokenize_procedure(tkr, t, x)]
+        @testset "flat output" begin
+            tkr = TextEncodeBase.FlatTokenizer(TextEncodeBase.IndexedTokenization())
+            tkr2 = TextEncodeBase.NaiveIndexedTokenizer()
 
-            tkr = NestedTkr()
+            @test tkr(document) == tkr2(document)
+            @test tkr(sentence) == tkr2(sentence)
+            @test tkr(word) == tkr2(word)
+        end
+
+        @testset "nested output" begin
+            # struct NestedTkr <: ATR end
+            # TextEncodeBase.tokenization(::NestedTkr) = TextEncodeBase.IndexedTokenization()
+            # TextEncodeBase.tokenize(tkr::NestedTkr, t::AT, x::Document) = TextEncodeBase.tokenize_procedure!(push!, Vector[], tkr, t, x)
+            # TextEncodeBase.tokenize(tkr::NestedTkr, t::AT, ::Nothing, x::Sentence) = [TextEncodeBase.tokenize_procedure(tkr, t, x)]
+            # tkr = NestedTkr()
+
+            tkr = TextEncodeBase.NestedTokenizer(TextEncodeBase.IndexedTokenization())
             @test tkr(document) == begin
                 sentences = split_sentences(document.x)
                 words = map(x->nltk_word_tokenize(x), sentences)
