@@ -130,8 +130,8 @@ let ATR = AbstractTokenizer, AT = AbstractTokenization
 
     # the outer-most api, splitting input and recursively tokenize the result. ignore if input is empty
     global @inline tokenize(tkr::ATR, t::AT, x::TokenStages) = tokenize_procedure(tkr, t, x)
-    global @inline tokenize(tkr::ATR, t::AT, s::Union{WordStage, SubWordStage}) = tokenize(tkr, t, s, wrap(tkr, t, s))
-    global @inline tokenize(tkr::ATR, t::AT, x::TokenStage) = [wrap(tkr, t, x)]
+    global @inline tokenize(tkr::ATR, t::AT, s::Union{WordStage, SubWordStage}) = isempty(getvalue(s)) ? TokenStage[] : tokenize(tkr, t, s, wrap(tkr, t, s))
+    global @inline tokenize(tkr::ATR, t::AT, x::TokenStage) = isempty(getvalue(x)) ? TokenStage[] : [wrap(tkr, t, x)]
     # 4-arg tokenize for distinguishing recursive call and direct call
     global @inline tokenize(tkr::ATR, t::AT, ::TokenStages, x::TokenStages) = tokenize(tkr, t, x)
     global @inline tokenize(tkr::ATR, t::AT, ::Nothing, x::TokenStages)     = tokenize(tkr, t, x)

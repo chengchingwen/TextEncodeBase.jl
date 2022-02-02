@@ -23,6 +23,14 @@ const AT = AbstractTokenization
             @test tkr(word) == [Token(word.x)]
         end
 
+        @testset "edge case" begin
+            tkr = TextEncodeBase.NaiveTokenizer()
+            @test tkr(Document("")) == []
+            @test tkr(Sentence("")) == []
+            @test tkr(Word("")) == []
+            @test tkr(Token("")) == []
+        end
+
         @testset "index tokenizer" begin
             tkr = TextEncodeBase.NaiveIndexedTokenizer()
             @test tkr(document) == begin
