@@ -102,40 +102,51 @@ function Base.show(io::IO, t::TokenStages)
     end
 end
 
+const ParentStages = Union{Nothing, TokenStages}
+
+abstract type Splittability end
+struct Splittable <: Splittability end
+struct UnSplittable <: Splittability end
+
+function splittability end
+
+splittable(::Splittable)   = true
+splittable(::UnSplittable) = false
+splittable(args...) = splittable(splittability(args...))
+
+splitting(::typeof(splittability), args...) = splitting(args...)
+splitting(::Splittable, args...) = splitting(args...)
+splitting(::UnSplittable, args...) = error("Argument is unsplittable: ", args)
+
 
 let ATR = AbstractTokenizer, AT = AbstractTokenization
+    global @inline splittability(tkr::ATR, t::AT, x::TokenStages) = splittability(tkr, nothing, t, x)
+    global @inline splittability(tkr::ATR, s::ParentStages, t::AT, x::TokenStages) = splittability(s, t, x)
+    global @inline splittability(::ParentStages, t::AT, x::TokenStages) = splittability(t, x)
+    global @inline splittability(t::AT, x::TokenStages) = UnSplittable()
+
     # [full dispatch, default to ignore tokenizer]
-    global @inline splitting(::ATR, t::AT, x::TokenStages)    = splitting(t, x)
-    global @inline splitting(::ATR, t::AT, s::TokenStages, x) = splitting(t, s, x)
+    global @inline splitting(::ATR, p::ParentStages, t::AT, x::TokenStages)    = splitting(p, t, x)
+    global @inline splitting(::ATR, p::ParentStages, t::AT, s::TokenStages, x) = splitting(p, t, s, x)
+    global @inline splitting(p::ParentStages, t::AT, x::TokenStages)    = splitting(t, x)
+    global @inline splitting(p::ParentStages, t::AT, s::TokenStages, x) = splitting(t, s, x)
     # [tokenization dispatch] default splitting callback
     global @inline splitting(::AT, ::TokenStages, x) = x
-    # [tokenization dispatch] default splitting behavior on specific stages
-    global @inline splitting(t::AT, d::DocumentStage)    = rulebased_split_sentences(getvalue(d))
-    global @inline splitting(t::AT, s::SentenceStage)    = nltk_word_tokenize(getvalue(s))
-    global @inline splitting(t::AT, s::SubSentenceStage) = nltk_word_tokenize(getvalue(s))
 
     # [full dispatch, default to ignore tokenizer] splittable (4-arg) & unsplittable (3-arg)
-    global @inline wrap(tkr::ATR, t::AT, s::TokenStages, x) = wrap(t, s, x)
-    global @inline wrap(tkr::ATR, t::AT, s::TokenStages)    = wrap(t, s)
-    # [tokenization dispatch] default behavior on specific stages, mark the splitting result for further tokenization
-    global @inline wrap(::AT, d::DocumentStage, x) = Sentence(x, getmeta(d))
-    global @inline wrap(::AT, s::SentenceStage, x) = Word(x, getmeta(s))
-    global @inline wrap(::AT, s::SubSentenceStage, x) = Word(x, getmeta(s))
+    global @inline wrap(::ATR, p::ParentStages, t::AT, s::TokenStages, x) = wrap(p, t, s, x)
+    global @inline wrap(::ATR, p::ParentStages, t::AT, x::TokenStages)    = wrap(p, t, x)
+    global @inline wrap(p::ParentStages, t::AT, s::TokenStages, x) = wrap(t, s, x)
+    global @inline wrap(p::ParentStages, t::AT, s::TokenStages)    = wrap(t, s)
     # [tokenization dispatch] default skip if splitting result is already wrapped
     global @inline wrap(::AT, ::TokenStages, x::TokenStages) = x
-    # [tokenization dispatch] default mark unsplittable as token
-    global @inline wrap(::AT, w::WordStage)    = Token(getvalue(w), getmeta(w))
-    global @inline wrap(::AT, w::SubWordStage) = Token(getvalue(w), getmeta(w))
-    global @inline wrap(::AT, t::TokenStage)   = t
 
     # the outer-most api, splitting input and recursively tokenize the result. ignore if input is empty
-    global @inline tokenize(tkr::ATR, t::AT, x::TokenStages) = tokenize_procedure(tkr, t, x)
-    global @inline tokenize(tkr::ATR, t::AT, s::Union{WordStage, SubWordStage}) = isempty(getvalue(s)) ? TokenStage[] : tokenize(tkr, t, s, wrap(tkr, t, s))
-    global @inline tokenize(tkr::ATR, t::AT, x::TokenStage) = isempty(getvalue(x)) ? TokenStage[] : [wrap(tkr, t, x)]
-    # 4-arg tokenize for distinguishing recursive call and direct call
-    global @inline tokenize(tkr::ATR, t::AT, ::TokenStages, x::TokenStages) = tokenize(tkr, t, x)
-    global @inline tokenize(tkr::ATR, t::AT, ::Nothing, x::TokenStages)     = tokenize(tkr, t, x)
+    global @inline tokenize(tkr::ATR, t::AT, x::TokenStages) = tokenize(tkr, nothing, t, x)
+    global @inline tokenize(tkr::ATR, s::ParentStages, t::AT, x::TokenStage) = isempty(getvalue(x)) ? TokenStage[] : TokenStage[wrap(tkr, s, t, x)]
+    global @inline tokenize(tkr::ATR, s::ParentStages, t::AT, x::TokenStages) = tokenize_procedure(tkr, s, t, x)
 end
+
 
 """
     tokenization_procedure(tokenizer, tokenizaton, stage)
@@ -144,17 +155,25 @@ The procedure of tokenization (`splitting` + `wrap` + `tokenize`).
  This is use to restore full behavior for stage that default
  unsplittable. Generally don't overload this function.
 """
-@inline tokenize_procedure(tkr, t, x) = tokenize_procedure!(append!, TokenStage[], tkr, t, x)
+@inline tokenize_procedure(tkr, t, x) = tokenize_procedure(tkr, t, nothing, x)
+@inline tokenize_procedure(tkr, s, t, x) = tokenize_procedure!(append!, splittability, TokenStage[], tkr, s, t, x)
+@inline tokenize_procedure!(op, v, tkr, s, t, x) = tokenize_procedure!(op, splittability, v, tkr, s, t, x)
+@inline tokenize_procedure!(op, ::typeof(splittability), v, tkr, s, t, x) = tokenize_procedure!(op, splittability(tkr, s, t, x), v, tkr, s, t, x)
 
-function tokenize_procedure!(op, v, tkr, t, x)
+function tokenize_procedure!(op, ::Splittable, v, tkr, s, t, x)
     isempty(getvalue(x)) && return v
-    for sp in splitting(tkr, t, x, splitting(tkr, t, x))
-        v1 = tokenize(tkr, t, x, wrap(tkr, t, x, sp))
+    for sp in splitting(tkr, s, t, x, splitting(splittability, tkr, s, t, x))
+        v1 = tokenize(tkr, x, t, wrap(tkr, s, t, x, sp))
         op(v, v1)
     end
     return v
 end
 
+function tokenize_procedure!(op, ::UnSplittable, v, tkr, s, t, x)
+    isempty(getvalue(x)) && return v
+    op(v, tokenize(tkr, x, t, wrap(tkr, s, t, x)))
+    return v
+end
 
 """
     splitting(t::AbstractTokenization, x::TokenStages)
@@ -213,8 +232,6 @@ function tokenize(tkr::AbstractTokenizer, t::AbstractTokenization, x::TokenStage
 
 # tokenizer api
 
-struct DefaultTokenization <: AbstractTokenization end
-
 """
     tokenization(::AbstractTokenizer) :: AbstractTokenization
 
@@ -230,5 +247,4 @@ Preprocess the input `x`. This is only called during `tkr(x)`.
 preprocess(t::AbstractTokenizer, x::TokenStages) = updatevalue(Base.Fix1(preprocess, t), x)
 preprocess(t::AbstractTokenizer, x) = x
 
-(t::AbstractTokenizer)(x::TS) where {TS <: TokenStages} = tokenize(t, tokenization(t), nothing, preprocess(t, x))
-
+(t::AbstractTokenizer)(x::TS) where {TS <: TokenStages} = tokenize(t, nothing, tokenization(t), preprocess(t, x))

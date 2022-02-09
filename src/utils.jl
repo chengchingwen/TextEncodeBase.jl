@@ -56,7 +56,7 @@ function matchsplit!(found, t, s)
     return found
 end
 
-function matchsplits(patterns, x)
+function MatchSplits(patterns, x)
     m, ms = first(patterns), @view patterns[2:end]
     sp = MatchSplitIterator(m, x)
 
@@ -68,6 +68,8 @@ function matchsplits(patterns, x)
     end
     return sp
 end
+
+@noinline matchsplits(patterns, x) = collect(Tuple{Bool, SubString}, MatchSplits(patterns, x))
 
 # misc
 

@@ -5,51 +5,69 @@ end
 
 using Base.Iterators: repeated
 
-struct IndexedTokenization <: AbstractTokenization end
-
-_offsets(s) = (meta = getmeta(s); hasmeta(s) && haskey(getmeta(s), :offsets) ? meta.offsets : Offsets(0,0))
-
-@inline splitting(::IndexedTokenization, s::TokenStages, x) = zip(repeated(_offsets(s)), x)
-@inline splitting(::IndexedTokenization, ::DocumentStage, x) = enumerate(x)
-function splitting(::IndexedTokenization, w::WordStage, x)
-    offsets = _offsets(w)
-    offsets.word += 1
-    return zip(repeated(offsets), x)
+struct IndexedTokenization{T<:AbstractTokenization} <: WrappedTokenization{T}
+    base::T
 end
+IndexedTokenization() = IndexedTokenization(DefaultTokenization())
 
-@inline wrap(::IndexedTokenization, d::DocumentStage, (i, x)) = Sentence(x, updatemeta(getmeta(d), (sentence_id = i,)))
-@inline wrap(::IndexedTokenization, s::SubSentenceStage, (i, x)) = Word(x, updatemeta(getmeta(s), (offsets = i,)))
-@inline wrap(::IndexedTokenization, s::SentenceStage, (i, x)) = Word(x, updatemeta(getmeta(s), (offsets = i,)))
+_offsets(s, w=0, t=0) = (meta = getmeta(s); hasmeta(s) && haskey(getmeta(s), :offsets) ? meta.offsets : Offsets(w,t))
 
-function wrap(::IndexedTokenization, w::WordStage, (i, x))
+@inline splitting(p::ParentStages, t::IndexedTokenization, s::TokenStages, x) = zip(repeated(_offsets(s)), Iterators.Flatten((true, Iterators.repeated(false))), splitting(p, t.base, s, x))
+@inline splitting(p::ParentStages, t::IndexedTokenization, d::DocumentStage, x) = enumerate(splitting(p, t.base, d, x))
+# function splitting(p::ParentStages, t::IndexedTokenization, w::WordStage, x)
+#     offsets = _offsets(w)
+#     offsets.word += 1
+#     return zip(repeated(offsets), splitting(p, t.base, w, x))
+# end
+
+@inline wrap(p::ParentStages, t::IndexedTokenization, s::TokenStages, (i, f, x)) = updatemeta(wrap(p, t.base, s, x), (offsets = i, isfirst = f))
+@inline wrap(p::ParentStages, t::IndexedTokenization, d::DocumentStage, (i, x)) = updatemeta(wrap(p, t.base, d, x), (sentence_id = i,))
+# @inline wrap(p::ParentStages, t::IndexedTokenization, d::SentenceStage, (i, x)) = updatemeta(wrap(p, t.base, d, x), (offsets = i,))
+
+# function wrap(p::ParentStages, t::IndexedTokenization, w::WordStage, (i, x))
+#     meta = getmeta(w)
+#     if hasmeta(w) && haskey(meta, :offsets)
+#         offsets = meta.offsets
+#         word_id = offsets.word += 1
+#     else
+#         word_id = i.word += 1
+#     end
+#     return updatemeta(wrap(p, t.base, w, x), (word_id = word_id, offsets = i,))
+# end
+
+
+@inline wrap(p::ParentStages, t::IndexedTokenization, s::TokenStages) = wrap(p, t.base, s)
+
+# function wrap(p::ParentStages, t::IndexedTokenization, w::WordStage)
+#     meta = getmeta(w)
+#     if hasmeta(w) && haskey(meta, :offsets)
+#         offsets = meta.offsets
+#         word_id = haskey(meta, :word_id) ? meta.word_id : (offsets.word += 1)
+#     else
+#         word_id = 1
+#     end
+#     return updatemeta(wrap(p, t.base, w), (word_id = word_id,))
+# end
+
+function wrap(p::ParentStages, t::IndexedTokenization, w::SubWordStage)
     meta = getmeta(w)
     if hasmeta(w) && haskey(meta, :offsets)
         offsets = meta.offsets
-        word_id = offsets.word
+        word_id = meta.isfirst ? (offsets.word += 1) : offsets.word
     else
         word_id = 1
     end
-    return SubWord(x, updatemeta(getmeta(w), (word_id = word_id, offsets = i,)))
+    return updatemeta(wrap(p, t.base, w), (word_id = word_id,))
 end
 
-function wrap(::IndexedTokenization, w::WordStage)
-    meta = getmeta(w)
-    if hasmeta(w) && haskey(meta, :offsets)
-        offsets = meta.offsets
-        word_id = offsets.word += 1
-    else
-        word_id = 1
-    end
-    return Token(getvalue(w), updatemeta(meta, (word_id = word_id,)))
-end
-
-function wrap(::IndexedTokenization, x::TokenStage)
+function wrap(p::ParentStages, t::IndexedTokenization, x::TokenStage)
+    x = wrap(p, t.base, x)
     meta = getmeta(x)
     if hasmeta(x) && haskey(meta, :offsets)
         offsets = meta.offsets
         word_id = haskey(meta, :word_id) ? meta.word_id : (offsets.word += 1)
         token_id = offsets.token += 1
-        meta = Base.structdiff(meta, NamedTuple{(:offsets,)})
+        meta = Base.structdiff(meta, NamedTuple{(:offsets, :isfirst)})
     else
         word_id = token_id = 1
     end
