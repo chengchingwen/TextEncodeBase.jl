@@ -15,9 +15,3 @@ MatchTokenization(patterns) = MatchTokenization(DefaultTokenization(), patterns)
 splittability(::Nothing, ::MatchTokenization, ::WordStage) = Splittable()
 @inline splitting(::Nothing, t::MatchTokenization, w::WordStage) = matchsplits(t.patterns, getvalue(w))
 @inline wrap(::Nothing, t::MatchTokenization, w::WordStage, (istoken, x)) = istoken ? Token(x, getmeta(w)) : Word(x, getmeta(w))
-
-function wrap(p::ParentStages, t::IndexedTokenization{MatchTokenization}, w::TokenStage)
-    y = wrap(p, t.base, w)
-    word_id = getmeta(y).word_id - 1
-    return updatemeta(y, (word_id = word_id,))
-end

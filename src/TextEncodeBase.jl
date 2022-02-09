@@ -11,7 +11,6 @@ export AbstractTokenizer
 
 include("./utils.jl")
 include("./base.jl")
-include("./hie.jl")
 include("./indexed.jl")
 include("./match.jl")
 include("./tkrs.jl")

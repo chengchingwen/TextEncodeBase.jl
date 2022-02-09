@@ -104,56 +104,71 @@ end
 
 const ParentStages = Union{Nothing, TokenStages}
 
+"""
+splittability trait
+
+The splittability trait decide whether the given combination (tokenizer x tokenization x stage) is
+ splittable or not (`Splittable` or `UnSplittable`). For example, `DefaultTokenization` and `SentenceStage`
+ is splittable (i.e. `splittability(::DefaultTokenization, ::SentenceStage) = Splittable()`). The splittability
+ change the behavior of `tokenize`: if it's splittable, `tokenize` will try to call `splitting` on the input,
+ `wrap` each splitting result and recurse. Otherwise, it will directly call `wrap` and then recurse into `tokenize`.
+"""
 abstract type Splittability end
 struct Splittable <: Splittability end
 struct UnSplittable <: Splittability end
 
+"""
+    splittability(args...)
+
+Return the splittability (`Splittable`/`UnSplittable`) of given argument combination.
+ Overload to make a `TokenStages` splittable.
+"""
 function splittability end
 
+"""
+    splittable(args...)
+
+Return `true` if the splittability of given argument combination is `Splittable()`.
+"""
+splittable(args...) = splittable(splittability(args...))
 splittable(::Splittable)   = true
 splittable(::UnSplittable) = false
-splittable(args...) = splittable(splittability(args...))
 
 splitting(::typeof(splittability), args...) = splitting(splittability(args...), args...)
 splitting(::Splittable, args...) = splitting(args...)
 splitting(::UnSplittable, args...) = error("Argument is unsplittable: ", args)
 
-
+# dispatch: tokenizer -> parent stage -> tokenization -> token stage
 let ATR = AbstractTokenizer, AT = AbstractTokenization
+    # splittability: overload to make specific combination splittable
     global @inline splittability(tkr::ATR, t::AT, x::TokenStages) = splittability(tkr, nothing, t, x)
     global @inline splittability(tkr::ATR, s::ParentStages, t::AT, x::TokenStages) = splittability(s, t, x)
     global @inline splittability(::ParentStages, t::AT, x::TokenStages) = splittability(t, x)
     global @inline splittability(t::AT, x::TokenStages) = UnSplittable()
-
-    # [full dispatch, default to ignore tokenizer]
-    global @inline splitting(::ATR, p::ParentStages, t::AT, x::TokenStages)    = splitting(p, t, x)
+    # after `Splittable`, define how to split it
+    global @inline splitting(::ATR, p::ParentStages, t::AT, x::TokenStages) = splitting(p, t, x)
+    global @inline splitting(p::ParentStages, t::AT, x::TokenStages) = splitting(t, x)
+    # a callback for `splitting`, `x` is the result of `splitting(::ATR, ::ParentStages,  ::TokenStages)`
     global @inline splitting(::ATR, p::ParentStages, t::AT, s::TokenStages, x) = splitting(p, t, s, x)
-    global @inline splitting(p::ParentStages, t::AT, x::TokenStages)    = splitting(t, x)
     global @inline splitting(p::ParentStages, t::AT, s::TokenStages, x) = splitting(t, s, x)
-    # [tokenization dispatch] default splitting callback
     global @inline splitting(::AT, ::TokenStages, x) = x
-
-    # [full dispatch, default to ignore tokenizer] splittable (4-arg) & unsplittable (3-arg)
+    # splittable (4-arg): wrap the splitting result into specific `TokenStages`, e.g. "word" => Word("word")
     global @inline wrap(::ATR, p::ParentStages, t::AT, s::TokenStages, x) = wrap(p, t, s, x)
-    global @inline wrap(::ATR, p::ParentStages, t::AT, x::TokenStages)    = wrap(p, t, x)
     global @inline wrap(p::ParentStages, t::AT, s::TokenStages, x) = wrap(t, s, x)
+    global @inline wrap(::AT, ::TokenStages, x::TokenStages) = x # already wrapped
+    # unsplittable (3-arg): transform the input into next `TokenStages`, e.g. Word("word") => Token("word")
+    global @inline wrap(::ATR, p::ParentStages, t::AT, x::TokenStages)    = wrap(p, t, x)
     global @inline wrap(p::ParentStages, t::AT, s::TokenStages)    = wrap(t, s)
-    # [tokenization dispatch] default skip if splitting result is already wrapped
-    global @inline wrap(::AT, ::TokenStages, x::TokenStages) = x
-
     # the outer-most api, splitting input and recursively tokenize the result. ignore if input is empty
     global @inline tokenize(tkr::ATR, t::AT, x::TokenStages) = tokenize(tkr, nothing, t, x)
-    global @inline tokenize(tkr::ATR, s::ParentStages, t::AT, x::TokenStage) = isempty(getvalue(x)) ? TokenStage[] : TokenStage[wrap(tkr, s, t, x)]
     global @inline tokenize(tkr::ATR, s::ParentStages, t::AT, x::TokenStages) = tokenize_procedure(tkr, s, t, x)
+    global @inline tokenize(tkr::ATR, s::ParentStages, t::AT, x::TokenStage) = isempty(getvalue(x)) ? TokenStage[] : TokenStage[wrap(tkr, s, t, x)]
 end
-
 
 """
     tokenization_procedure(tokenizer, tokenizaton, stage)
 
 The procedure of tokenization (`splitting` + `wrap` + `tokenize`).
- This is use to restore full behavior for stage that default
- unsplittable. Generally don't overload this function.
 """
 @inline tokenize_procedure(tkr, t, x) = tokenize_procedure(tkr, t, nothing, x)
 @inline tokenize_procedure(tkr, s, t, x) = tokenize_procedure!(append!, splittability, TokenStage[], tkr, s, t, x)
@@ -186,16 +201,6 @@ Overload this method for custom tokenization.
 """
 function splitting end
 
-@eval $((@macroexpand @doc """
-    splitting(t::AbstractTokenization, s::TokenStages, x)
-
-Interface for providing callback for splitting. `x` is the result of `splitting(t, s)`.
-
-Overload this method for custom `splitting` callback.
-"""
-function splitting(::AbstractTokenization, ::TokenStages, x) end
-).args[2])
-
 """
     wrap(t::AbstractTokenization, s::TokenStages, x)
 
@@ -218,16 +223,39 @@ Overload this method for custom transform.
 function wrap(t::AbstractTokenization, x::TokenStages) end
 ).args[2])
 
-@eval $((@macroexpand @doc """
-    tokenize(tkr::AbstractTokenizer, t::AbstractTokenization, x::TokenStages)
 
-Tokenize `x` according to `tkr` and `t`.
+# abstract type for convenience
 
-Overload for custom tokenizer, tokenization and stages. For making a unsplittable
- into splittable (or vice versa), you must overload this method.
-"""
-function tokenize(tkr::AbstractTokenizer, t::AbstractTokenization, x::TokenStages) end
-).args[2])
+abstract type BaseTokenization <: AbstractTokenization end
+
+struct DefaultTokenization <: BaseTokenization end
+
+splittability(::BaseTokenization, x::Union{DocumentStage, SentenceStage, SubSentenceStage}) = Splittable()
+splittability(::BaseTokenization, x::Union{WordStage, SubWordStage}) = UnSplittable()
+
+splitting(::BaseTokenization, d::DocumentStage)    = rulebased_split_sentences(getvalue(d))
+splitting(::BaseTokenization, s::SentenceStage)    = nltk_word_tokenize(getvalue(s))
+splitting(::BaseTokenization, s::SubSentenceStage) = nltk_word_tokenize(getvalue(s))
+
+wrap(::BaseTokenization, d::DocumentStage, x) = Sentence(x, getmeta(d))
+wrap(::BaseTokenization, s::SentenceStage, x) = Word(x, getmeta(s))
+wrap(::BaseTokenization, s::SubSentenceStage, x) = Word(x, getmeta(s))
+wrap(::BaseTokenization, w::WordStage, x) = SubWord(x, getmeta(w))
+
+wrap(::BaseTokenization, w::WordStage)    = Token(getvalue(w), getmeta(w))
+wrap(::BaseTokenization, w::SubWordStage) = Token(getvalue(w), getmeta(w))
+wrap(::BaseTokenization, t::TokenStage)   = t
+
+abstract type WrappedTokenization{T<:AbstractTokenization} <: AbstractTokenization end
+
+base(t::WrappedTokenization) = t.base
+
+splittability(p::Union{Nothing, TokenStages}, t::WrappedTokenization, x::TokenStages) = splittability(p, base(t), x)
+splitting(p::Union{Nothing, TokenStages}, t::WrappedTokenization, x::TokenStages)    = splitting(p, base(t), x)
+splitting(p::Union{Nothing, TokenStages}, t::WrappedTokenization, s::TokenStages, x) = splitting(p, base(t), s, x)
+
+wrap(p::Union{Nothing, TokenStages}, t::WrappedTokenization, s::TokenStages, x) = wrap(p, base(t), s, x)
+wrap(p::Union{Nothing, TokenStages}, t::WrappedTokenization, s::TokenStages)    = wrap(p, base(t), s)
 
 
 # tokenizer api
