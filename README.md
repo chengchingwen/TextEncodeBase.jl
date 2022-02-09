@@ -91,12 +91,14 @@ The tokenizer part is built ontop of `WordTokenizers.jl` and provide a high-leve
  `WordTokenizers.jl` provides a set of tokenizers and a low-level api (`TokenBuffer`) for define
  custom tokenizers. It's mainly focus on how to split a setnece into tokens. We, on the other hand,
  focus on how to combine different tokenizer or include other information during the tokenization.
- For example, sometimes you might want to prevent urls from being splited or add an extra tag to it,
+ For example, sometimes you might want to prevent urls from being splited or add some extra tags to it,
  these can be done by defining a custom `AbstractTokenizer` and overload some methods. Besides, we
  force the user to explicit wrap the input as one of the stages (`Document`/`Sentence`/`Word`/...),
  so no confusion.
 
 ### Example of using the Tokenizer api
+
+Here is an example that wrapped the word tokenizer and wordpiece from `Transformers.jl` into our Tokenizer api.
 
 ```julia
 using Transformers
@@ -187,6 +189,40 @@ julia> batch_with_TEB
 
 julia> batch_without_TEB == TextEncodeBase.nestedcall(getvalue, batch_with_TEB)
 true
+
+```
+
+Since the wordpiece break word into subword, we might want to know which word each subword belongs to:
+
+```julia
+julia> itkr = NestedTokenizer(TextEncodeBase.IndexedTokenization(BertCasedTokenization(wordpiece)));
+
+julia> ibatch_with_TEB = itkr(BatchSentence(texts));
+
+# subword from same word having the same `word_id`
+julia> ibatch_with_TEB[1]
+11-element Vector{TextEncodeBase.TokenStage}:
+ Token("Peter", (sentence_id = 1, word_id = 1, token_id = 1))
+ Token("Piper", (sentence_id = 1, word_id = 2, token_id = 2))
+ Token("picked", (sentence_id = 1, word_id = 3, token_id = 3))
+ Token("a", (sentence_id = 1, word_id = 4, token_id = 4))
+ Token("p", (sentence_id = 1, word_id = 5, token_id = 5))
+ Token("##eck", (sentence_id = 1, word_id = 5, token_id = 6))
+ Token("of", (sentence_id = 1, word_id = 6, token_id = 7))
+ Token("pick", (sentence_id = 1, word_id = 7, token_id = 8))
+ Token("##led", (sentence_id = 1, word_id = 7, token_id = 9))
+ Token("pepper", (sentence_id = 1, word_id = 8, token_id = 10))
+ Token("##s", (sentence_id = 1, word_id = 8, token_id = 11))
+
+julia> ibatch_with_TEB[2]
+7-element Vector{TextEncodeBase.TokenStage}:
+ Token("Fu", (sentence_id = 2, word_id = 1, token_id = 1))
+ Token("##zzy", (sentence_id = 2, word_id = 1, token_id = 2))
+ Token("Wu", (sentence_id = 2, word_id = 2, token_id = 3))
+ Token("##zzy", (sentence_id = 2, word_id = 2, token_id = 4))
+ Token("was", (sentence_id = 2, word_id = 3, token_id = 5))
+ Token("a", (sentence_id = 2, word_id = 4, token_id = 6))
+ Token("bear", (sentence_id = 2, word_id = 5, token_id = 7))
 
 ```
 
