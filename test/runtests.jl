@@ -3,7 +3,7 @@ using Test
 
 using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     BaseTokenization, NestedTokenizer, FlatTokenizer,
-    IndexedTokenization, MatchTokenization,
+    WordTokenization, IndexedTokenization, MatchTokenization,
     TokenStages, Document, Sentence, Word, Token
 using TextEncodeBase: getvalue, getmeta, with_head_tail, trunc_and_pad, nested2batch, nestedcall
 
@@ -36,6 +36,16 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test tkr(Sentence("")) == []
             @test tkr(Word("")) == []
             @test tkr(Token("")) == []
+        end
+
+        @testset "word tokenizer" begin
+            tkr = FlatTokenizer(WordTokenization(tokenize=poormans_tokenize))
+            tkr2 = FlatTokenizer()
+            @test tkr(document) == map(Token, mapfoldl(poormans_tokenize, append!, split_sentences(document.x)))
+            @test tkr(sentence) == map(Token, poormans_tokenize(sentence.x))
+            @test tkr(word) == [Token(word.x)]
+            @test tkr(document) != tkr2(document)
+            @test tkr(sentence) != tkr2(sentence)
         end
 
         @testset "index tokenizer" begin
