@@ -1,24 +1,24 @@
-abstract type Tokenization <: AbstractTokenization end
+abstract type BaseTokenization <: AbstractTokenization end
 
-struct DefaultTokenization <: Tokenization end
+struct DefaultTokenization <: BaseTokenization end
 
-splittability(::Tokenization, x::Union{DocumentStage, SentenceStage, SubSentenceStage}) = Splittable()
-splittability(::Tokenization, x::Union{WordStage, SubWordStage}) = UnSplittable()
+splittability(::BaseTokenization, x::Union{DocumentStage, SentenceStage, SubSentenceStage}) = Splittable()
+splittability(::BaseTokenization, x::Union{WordStage, SubWordStage}) = UnSplittable()
 
-splitting(::Tokenization, d::DocumentStage)    = rulebased_split_sentences(getvalue(d))
-splitting(::Tokenization, s::SentenceStage)    = nltk_word_tokenize(getvalue(s))
-splitting(::Tokenization, s::SubSentenceStage) = nltk_word_tokenize(getvalue(s))
+splitting(::BaseTokenization, d::DocumentStage)    = rulebased_split_sentences(getvalue(d))
+splitting(::BaseTokenization, s::SentenceStage)    = nltk_word_tokenize(getvalue(s))
+splitting(::BaseTokenization, s::SubSentenceStage) = nltk_word_tokenize(getvalue(s))
 
 # [tokenization dispatch] default behavior on specific stages, mark the splitting result for further tokenization
-wrap(::Tokenization, d::DocumentStage, x) = Sentence(x, getmeta(d))
-wrap(::Tokenization, s::SentenceStage, x) = Word(x, getmeta(s))
-wrap(::Tokenization, s::SubSentenceStage, x) = Word(x, getmeta(s))
-wrap(::Tokenization, w::WordStage, x) = SubWord(x, getmeta(w))
+wrap(::BaseTokenization, d::DocumentStage, x) = Sentence(x, getmeta(d))
+wrap(::BaseTokenization, s::SentenceStage, x) = Word(x, getmeta(s))
+wrap(::BaseTokenization, s::SubSentenceStage, x) = Word(x, getmeta(s))
+wrap(::BaseTokenization, w::WordStage, x) = SubWord(x, getmeta(w))
 
 # [tokenization dispatch] default mark unsplittable as token
-wrap(::Tokenization, w::WordStage)    = Token(getvalue(w), getmeta(w))
-wrap(::Tokenization, w::SubWordStage) = Token(getvalue(w), getmeta(w))
-wrap(::Tokenization, t::TokenStage)   = t
+wrap(::BaseTokenization, w::WordStage)    = Token(getvalue(w), getmeta(w))
+wrap(::BaseTokenization, w::SubWordStage) = Token(getvalue(w), getmeta(w))
+wrap(::BaseTokenization, t::TokenStage)   = t
 
 abstract type WrappedTokenization{T<:AbstractTokenization} <: AbstractTokenization end
 
