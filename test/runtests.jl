@@ -2,13 +2,20 @@ using TextEncodeBase
 using Test
 
 using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
+    BaseTokenization, NestedTokenizer, FlatTokenizer,
+    WordTokenization, IndexedTokenization, MatchTokenization,
     TokenStages, Document, Sentence, Word, Token
-using TextEncodeBase: getvalue, getmeta, with_head_tail, trunc_and_pad, nested2batch
+using TextEncodeBase: getvalue, getmeta, with_head_tail, trunc_and_pad, nested2batch, nestedcall
 
 using WordTokenizers
 
 const ATR = AbstractTokenizer
 const AT = AbstractTokenization
+const BT = BaseTokenization
+
+struct CharTk <: BT end
+TextEncodeBase.splitting(::CharTk, x::Word) = split(x.x, "")
+TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
 
 @testset "TextEncodeBase.jl" begin
     @testset "Tokenize" begin
@@ -17,22 +24,32 @@ const AT = AbstractTokenization
         word = Word("word")
 
         @testset "base tokenizer" begin
-            tkr = TextEncodeBase.NaiveTokenizer()
+            tkr = FlatTokenizer()
             @test tkr(document) == map(Token, mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x)))
             @test tkr(sentence) == map(Token, nltk_word_tokenize(sentence.x))
             @test tkr(word) == [Token(word.x)]
         end
 
         @testset "edge case" begin
-            tkr = TextEncodeBase.NaiveTokenizer()
+            tkr = FlatTokenizer()
             @test tkr(Document("")) == []
             @test tkr(Sentence("")) == []
             @test tkr(Word("")) == []
             @test tkr(Token("")) == []
         end
 
+        @testset "word tokenizer" begin
+            tkr = FlatTokenizer(WordTokenization(tokenize=poormans_tokenize))
+            tkr2 = FlatTokenizer()
+            @test tkr(document) == map(Token, mapfoldl(poormans_tokenize, append!, split_sentences(document.x)))
+            @test tkr(sentence) == map(Token, poormans_tokenize(sentence.x))
+            @test tkr(word) == [Token(word.x)]
+            @test tkr(document) != tkr2(document)
+            @test tkr(sentence) != tkr2(sentence)
+        end
+
         @testset "index tokenizer" begin
-            tkr = TextEncodeBase.NaiveIndexedTokenizer()
+            tkr = FlatTokenizer(IndexedTokenization())
             @test tkr(document) == begin
                 sentences = split_sentences(document.x)
                 words = map(x->nltk_word_tokenize(x), sentences)
@@ -56,7 +73,7 @@ const AT = AbstractTokenization
         end
 
         @testset "match tokenizer" begin
-            tkr = TextEncodeBase.NaiveMatchTokenizer([r"\d", r"en"])
+            tkr = FlatTokenizer(MatchTokenization([r"\d", r"en"]))
             @test map(getvalue, tkr(document)) == [
                 "This", "is", "the", "first", "s",
                 "en", "t", "en", "ce", ".", "And",
@@ -72,7 +89,7 @@ const AT = AbstractTokenization
         end
 
         @testset "indexed match tokenizer" begin
-            tkr = TextEncodeBase.NaiveIndexedMatchTokenizer([r"\d", r"en"])
+            tkr = FlatTokenizer(IndexedTokenization(MatchTokenization([r"\d", r"en"])))
             @test map(getvalue, tkr(document)) == [
                 "This", "is", "the", "first", "s",
                 "en", "t", "en", "ce", ".", "And",
@@ -96,23 +113,8 @@ const AT = AbstractTokenization
             @test map(getmeta, tkr(Word("123"))) == map(NamedTuple{(:word_id, :token_id)}, zip(1:3, 1:3))
         end
 
-        @testset "flat output" begin
-            tkr = TextEncodeBase.FlatTokenizer(TextEncodeBase.IndexedTokenization())
-            tkr2 = TextEncodeBase.NaiveIndexedTokenizer()
-
-            @test tkr(document) == tkr2(document)
-            @test tkr(sentence) == tkr2(sentence)
-            @test tkr(word) == tkr2(word)
-        end
-
         @testset "nested output" begin
-            # struct NestedTkr <: ATR end
-            # TextEncodeBase.tokenization(::NestedTkr) = TextEncodeBase.IndexedTokenization()
-            # TextEncodeBase.tokenize(tkr::NestedTkr, t::AT, x::Document) = TextEncodeBase.tokenize_procedure!(push!, Vector[], tkr, t, x)
-            # TextEncodeBase.tokenize(tkr::NestedTkr, t::AT, ::Nothing, x::Sentence) = [TextEncodeBase.tokenize_procedure(tkr, t, x)]
-            # tkr = NestedTkr()
-
-            tkr = TextEncodeBase.NestedTokenizer(TextEncodeBase.IndexedTokenization())
+            tkr = NestedTokenizer(IndexedTokenization())
             @test tkr(document) == begin
                 sentences = split_sentences(document.x)
                 words = map(x->nltk_word_tokenize(x), sentences)
@@ -135,12 +137,7 @@ const AT = AbstractTokenization
         end
 
         @testset "indexed char" begin
-            struct CharTkr <: ATR end
-            TextEncodeBase.tokenization(::CharTkr) = TextEncodeBase.IndexedTokenization()
-            TextEncodeBase.splitting(::CharTkr, t::AT, x::Word) = split(x.x, "")
-            TextEncodeBase.tokenize(tkr::CharTkr, t::AT, x::Word) = TextEncodeBase.tokenize_procedure(tkr, t, x)
-
-            tkr = CharTkr()
+            tkr = FlatTokenizer(IndexedTokenization(CharTk()))
             @test tkr(document) == begin
                 sentences = split_sentences(document.x)
                 words = map(x->nltk_word_tokenize(x), sentences)
@@ -174,6 +171,50 @@ const AT = AbstractTokenization
                 end
                 tokens
             end
+        end
+
+        @testset "nested indexed match char" begin
+            tkr = NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk(), [r"\d", r"en"])))
+            s(x) = split(x, "")
+            r(x, n) = repeat(x:x, n)
+            @test nestedcall(getvalue, tkr(document)) == [
+                [
+                    s("This"); s("is"); s("the"); s("first");
+                    "s"; "en"; "t"; "en"; s("ce"); ".";
+                ],
+                [
+                    s("And"); s("the"); s("second"); s("one"); s("with");
+                    s("some"); s("number"); "1"; "2"; "3"; "4"; "5"; ".";
+                ]
+            ]
+            @test nestedcall(getmeta, tkr(document)) == begin
+                sentence_id = [r(1, 21), r(2, 35)]
+                word_id = [[
+                        r(1, 4); r(2, 2); r(3, 3); r(4, 5);
+                        5; 6; 7; 8; r(9, 2); 10;
+                    ], [
+                        r(1, 3); r(2, 3); r(3, 6); r(4, 3); r(5, 4);
+                        r(6, 4); r(7, 6); 8; 9; 10; 11; 12; 13;
+                    ]]
+                token_id = [[1:21;], [1:35;]]
+                map((s,w,t)->map(NamedTuple{(:sentence_id, :word_id, :token_id)}, zip(s,w,t)), sentence_id, word_id, token_id)
+            end
+            @test nestedcall(getvalue, tkr(sentence)) == [
+                [
+                    "A"; s("single"); "s"; "en"; "t"; "en";
+                    s("ce"); s("with"); "3"; "1"; s("char"); ".";
+                ]
+            ]
+            @test nestedcall(getmeta, tkr(sentence)) == begin
+                word_id = [
+                    1; r(2, 6); 3; 4; 5; 6;
+                    r(7, 2); r(8, 4); 9; 10; r(11, 4); 12;
+                ]
+                token_id = [1:24;]
+                [map(NamedTuple{(:word_id, :token_id)}, zip(word_id, token_id))]
+            end
+            @test nestedcall(getvalue, tkr(word)) == ["w", "o", "r", "d"]
+            @test nestedcall(getmeta, tkr(word)) == map(NamedTuple{(:word_id, :token_id)}, zip(r(1, 4), 1:4))
         end
     end
 
