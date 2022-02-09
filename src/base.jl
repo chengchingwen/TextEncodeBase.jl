@@ -114,7 +114,7 @@ splittable(::Splittable)   = true
 splittable(::UnSplittable) = false
 splittable(args...) = splittable(splittability(args...))
 
-splitting(::typeof(splittability), args...) = splitting(args...)
+splitting(::typeof(splittability), args...) = splitting(splittability(args...), args...)
 splitting(::Splittable, args...) = splitting(args...)
 splitting(::UnSplittable, args...) = error("Argument is unsplittable: ", args)
 
