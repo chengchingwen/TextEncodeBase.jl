@@ -14,40 +14,11 @@ _offsets(s, w=0, t=0) = (meta = getmeta(s); hasmeta(s) && haskey(getmeta(s), :of
 
 @inline splitting(p::ParentStages, t::IndexedTokenization, s::TokenStages, x) = zip(repeated(_offsets(s)), Iterators.Flatten((true, Iterators.repeated(false))), splitting(p, t.base, s, x))
 @inline splitting(p::ParentStages, t::IndexedTokenization, d::DocumentStage, x) = enumerate(splitting(p, t.base, d, x))
-# function splitting(p::ParentStages, t::IndexedTokenization, w::WordStage, x)
-#     offsets = _offsets(w)
-#     offsets.word += 1
-#     return zip(repeated(offsets), splitting(p, t.base, w, x))
-# end
 
 @inline wrap(p::ParentStages, t::IndexedTokenization, s::TokenStages, (i, f, x)) = updatemeta(wrap(p, t.base, s, x), (offsets = i, isfirst = f))
 @inline wrap(p::ParentStages, t::IndexedTokenization, d::DocumentStage, (i, x)) = updatemeta(wrap(p, t.base, d, x), (sentence_id = i,))
-# @inline wrap(p::ParentStages, t::IndexedTokenization, d::SentenceStage, (i, x)) = updatemeta(wrap(p, t.base, d, x), (offsets = i,))
-
-# function wrap(p::ParentStages, t::IndexedTokenization, w::WordStage, (i, x))
-#     meta = getmeta(w)
-#     if hasmeta(w) && haskey(meta, :offsets)
-#         offsets = meta.offsets
-#         word_id = offsets.word += 1
-#     else
-#         word_id = i.word += 1
-#     end
-#     return updatemeta(wrap(p, t.base, w, x), (word_id = word_id, offsets = i,))
-# end
-
 
 @inline wrap(p::ParentStages, t::IndexedTokenization, s::TokenStages) = wrap(p, t.base, s)
-
-# function wrap(p::ParentStages, t::IndexedTokenization, w::WordStage)
-#     meta = getmeta(w)
-#     if hasmeta(w) && haskey(meta, :offsets)
-#         offsets = meta.offsets
-#         word_id = haskey(meta, :word_id) ? meta.word_id : (offsets.word += 1)
-#     else
-#         word_id = 1
-#     end
-#     return updatemeta(wrap(p, t.base, w), (word_id = word_id,))
-# end
 
 function wrap(p::ParentStages, t::IndexedTokenization, w::SubWordStage)
     meta = getmeta(w)
