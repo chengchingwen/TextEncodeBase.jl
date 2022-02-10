@@ -347,4 +347,14 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test_throws DimensionMismatch nested2batch([[1:5], 2:6])
         end
     end
+
+    @testset "Encoder" begin
+        sentence = Sentence("A single sentence with 31 char.")
+        tkr = NestedTokenizer(IndexedTokenization(CharTk()))
+        vocab = Vocab(map(string, ['a':'z'; 'A':'Z']))
+        enc = TextEncoder(tkr, vocab, nested2batch∘nestedcall(getvalue))
+        s(x) = mapfoldl(y->split(y,""), append!, split(x); init=String[])
+        @test encode(enc, sentence) == reshape(lookup(OneHot, vocab, s(sentence.x)), Val(3))
+        @test decode(enc, encode(enc, sentence)) == lookup(vocab, reshape(lookup(OneHot, vocab, s(sentence.x)), Val(3)))
+    end
 end
