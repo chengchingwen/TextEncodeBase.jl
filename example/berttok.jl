@@ -93,3 +93,71 @@ true
 
 =#
 
+using TextEncodeBase: IndexedTokenization
+
+itkr = NestedTokenizer(IndexedTokenization(BertCasedTokenization(wordpiece)))
+
+ibatch_with_TEB = itkr(BatchSentence(texts))
+
+#=
+# subword from same word having the same `word_id`
+julia> ibatch_with_TEB[1]
+11-element Vector{TextEncodeBase.TokenStage}:
+ Token("Peter", (sentence_id = 1, word_id = 1, token_id = 1))
+ Token("Piper", (sentence_id = 1, word_id = 2, token_id = 2))
+ Token("picked", (sentence_id = 1, word_id = 3, token_id = 3))
+ Token("a", (sentence_id = 1, word_id = 4, token_id = 4))
+ Token("p", (sentence_id = 1, word_id = 5, token_id = 5))
+ Token("##eck", (sentence_id = 1, word_id = 5, token_id = 6))
+ Token("of", (sentence_id = 1, word_id = 6, token_id = 7))
+ Token("pick", (sentence_id = 1, word_id = 7, token_id = 8))
+ Token("##led", (sentence_id = 1, word_id = 7, token_id = 9))
+ Token("pepper", (sentence_id = 1, word_id = 8, token_id = 10))
+ Token("##s", (sentence_id = 1, word_id = 8, token_id = 11))
+
+julia> ibatch_with_TEB[2]
+7-element Vector{TextEncodeBase.TokenStage}:
+ Token("Fu", (sentence_id = 2, word_id = 1, token_id = 1))
+ Token("##zzy", (sentence_id = 2, word_id = 1, token_id = 2))
+ Token("Wu", (sentence_id = 2, word_id = 2, token_id = 3))
+ Token("##zzy", (sentence_id = 2, word_id = 2, token_id = 4))
+ Token("was", (sentence_id = 2, word_id = 3, token_id = 5))
+ Token("a", (sentence_id = 2, word_id = 4, token_id = 6))
+ Token("bear", (sentence_id = 2, word_id = 5, token_id = 7))
+
+=#
+
+
+using TextEncodeBase: nestedcall, with_head_tail, trunc_and_pad, nested2batch
+
+# construct `Vocab` with `WordPiece`
+vocab = Vocab(wordpiece.vocab, wordpiece.vocab[wordpiece.unk_idx])
+
+# define encoder with `TextEncoder`
+encoder = TextEncoder(
+    itkr, vocab,
+    nested2batch ∘ trunc_and_pad(nothing, vocab.unk) ∘ with_head_tail("[CLS]", "[SEP]") ∘ nestedcall(getvalue)
+)
+
+#=
+julia> encode(enc, BatchSentence(texts))
+28996x13x2 OneHotArray{28996, 3, Matrix{OneHot{0x00007144}}}:
+[...]
+
+julia> decode(enc, ans)
+13×2 Matrix{String}:
+ "[CLS]"   "[CLS]"
+ "Peter"   "Fu"
+ "Piper"   "##zzy"
+ "picked"  "Wu"
+ "a"       "##zzy"
+ "p"       "was"
+ "##eck"   "a"
+ "of"      "bear"
+ "pick"    "[SEP]"
+ "##led"   "[UNK]"
+ "pepper"  "[UNK]"
+ "##s"     "[UNK]"
+ "[SEP]"   "[UNK]"
+
+=#

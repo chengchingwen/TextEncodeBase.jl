@@ -228,4 +228,42 @@ julia> ibatch_with_TEB[2]
 
 ## TextEncoder
 
-The text encoder is just a combination of vocabulary and tokenizer.
+The text encoder is just a combination of vocabulary and tokenizer. We also
+ provide some helper function like (`with_head_tail`/`nested2batch`/...) for
+ transform the tokenizer result into `lookup`-able format.
+
+### Example
+
+```julia
+using TextEncodeBase: nestedcall, with_head_tail, trunc_and_pad, nested2batch
+
+# construct `Vocab` with `WordPiece`
+vocab = Vocab(wordpiece.vocab, wordpiece.vocab[wordpiece.unk_idx])
+
+# define encoder with `TextEncoder`
+encoder = TextEncoder(
+    itkr, vocab,
+    nested2batch ∘ trunc_and_pad(nothing, vocab.unk) ∘ with_head_tail("[CLS]", "[SEP]") ∘ nestedcall(getvalue)
+)
+
+julia> encode(enc, BatchSentence(texts))
+28996x13x2 OneHotArray{28996, 3, Matrix{OneHot{0x00007144}}}:
+[...]
+
+julia> decode(enc, ans)
+13×2 Matrix{String}:
+ "[CLS]"   "[CLS]"
+ "Peter"   "Fu"
+ "Piper"   "##zzy"
+ "picked"  "Wu"
+ "a"       "##zzy"
+ "p"       "was"
+ "##eck"   "a"
+ "of"      "bear"
+ "pick"    "[SEP]"
+ "##led"   "[UNK]"
+ "pepper"  "[UNK]"
+ "##s"     "[UNK]"
+ "[SEP]"   "[UNK]"
+
+```
