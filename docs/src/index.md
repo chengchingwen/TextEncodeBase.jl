@@ -13,7 +13,7 @@ An api for encoding text, built on top of [WordTokenizers.jl](https://github.com
 # Usages
 
 Here are some explanation and examples for using `TextEncodeBase.jl`, you can also find other information
- from the [docs](https://chengchingwen.github.io/TextEncodeBase.jl/dev) or [test](/test/runtests.jl)
+ from the [test](https://github.com/chengchingwen/TextEncodeBase.jl/blob/main/test/runtests.jl)
 
 ## Vocabulary
 
