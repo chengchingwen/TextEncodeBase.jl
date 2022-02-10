@@ -178,10 +178,7 @@ nestedmaxlength(x::AbstractArray) = length(x)
 
 _checkeqsize(x, y) = x == y ? x : throw(DimensionMismatch("nested size not the same: $x != $y"))
 
-function nestedsize(x::AbstractArray{<:AbstractArray})
-    dim = size(x)
-    return (mapfoldl(nestedsize, _checkeqsize, x)..., dim...)
-end
+nestedsize(x::AbstractArray{<:AbstractArray}) = (mapfoldl(nestedsize, _checkeqsize, x)..., size(x)...)
 nestedsize(x::AbstractArray) = size(x)
 
 nestedtype(x::AbstractArray{<:AbstractArray}) = mapreduce(nestedtype, promote_type, x)

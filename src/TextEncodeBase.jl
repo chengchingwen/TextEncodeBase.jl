@@ -7,7 +7,7 @@ using PrimitiveOneHot
 using PrimitiveOneHot: OneHot
 
 # tokenize
-export AbstractTokenizer
+export AbstractTokenizer, AbstractTokenization
 
 include("./utils.jl")
 include("./base.jl")
@@ -21,7 +21,7 @@ export Vocab, lookup, OneHot, OneHotArray
 include("./vocab.jl")
 
 # encode
-export AbstractTextEncoder, TextEncoder
+export AbstractTextEncoder, TextEncoder, encode, decode
 
 include("./encode.jl")
 
