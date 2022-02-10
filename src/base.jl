@@ -263,7 +263,7 @@ wrap(p::Union{Nothing, TokenStages}, t::WrappedTokenization, s::TokenStages)    
 """
     tokenization(::AbstractTokenizer) :: AbstractTokenization
 
-Return the tokenization type of given tokenizer.
+Return the tokenization object of given tokenizer.
 """
 tokenization(::AbstractTokenizer) = DefaultTokenization()
 

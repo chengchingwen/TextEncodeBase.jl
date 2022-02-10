@@ -22,6 +22,9 @@ FlatTokenizer() = FlatTokenizer(DefaultTokenization())
 
 tokenization(tkr::FlatTokenizer) = tkr.tokenization
 
+@inline tokenize(tkr::FlatTokenizer, s::ParentStages, t::AbstractTokenization, x::TokenStages) = tokenize_procedure(tkr, s, t, x)
+@inline tokenize(tkr::FlatTokenizer, s::ParentStages, t::AbstractTokenization, x::TokenStage) = isempty(getvalue(x)) ? TokenStage[] : TokenStage[wrap(tkr, s, t, x)]
+
 "tokenizer that return nested array instead of flat array of tokens"
 struct NestedTokenizer{T<:AbstractTokenization} <: AbstractTokenizer
     tokenization::T
