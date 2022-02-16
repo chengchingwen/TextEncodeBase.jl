@@ -221,6 +221,8 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
     @testset "Vocabulary" begin
         vocab = Vocab(["a", "b", "c", "a", "b", "c"])
         vocab_unk = Vocab(["a", "b", "xxx"], "xxx")
+        vocab_char = Vocab{Char}('a':'z', ' ')
+        vocab_int = Vocab{Int}(11:20, 0)
 
         @test length(vocab) == 3
         @test vocab.list == ["a", "b", "c"]
@@ -228,6 +230,8 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
         @test length(vocab_unk) == 3
         @test vocab_unk.list == ["a", "b", "xxx"]
         @test vocab_unk.unki == 3
+        @test vocab_int.list == collect(11:20)
+        @test sprint(show, vocab_int) == "Vocab{$Int, StaticArrays.SizedVector{10, $Int, Vector{$Int}}}(size = 10, unk = 0, unki = 0)"
 
         @testset "lookup" begin
             @test lookup(vocab, "a") == 1
@@ -256,6 +260,15 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
 
             @test lookup(vocab, [1, "a", 0, "A", "[UNK]"]) == ["a", 1, "[UNK]", 0, 0]
             @test lookup(vocab_unk, [1, "a", 0, "A", "[UNK]"]) == ["a", 1, "xxx", 3, 3]
+
+            @test lookup(vocab, [(1, "a"), (a=0, b="A"), "[UNK]"]) == [("a", 1), (a="[UNK]", b=0), 0]
+            @test lookup(vocab_char, ['a', (x='x',)], 26) == ([1, (x=24,)], 'z')
+        end
+
+        @testset "lookup int" begin
+            @test lookup(vocab_int, 1,2,3) == (11,12,13)
+            @test lookup(Int, vocab_int, 1,2,3) == (0,0,0)
+            @test lookup(Int, vocab_int, 11,12,13) == (1,2,3)
         end
 
         @testset "onehot" begin

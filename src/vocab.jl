@@ -1,8 +1,10 @@
 using StaticArrays
 
-abstract type AbstractVocabulary end
+abstract type AbstractVocabulary{T} end
 
-struct Vocab{T, A<:AbstractVector{T}} <: AbstractVocabulary
+Base.eltype(::AbstractVocabulary{T}) where T = T
+
+struct Vocab{T, A<:AbstractVector{T}} <: AbstractVocabulary{T}
     list::A
     unk::T
     unki::Int
@@ -16,12 +18,21 @@ Constructor for `Vocab`. `data` is the list of vocabulary word, can be nonunique
  `unk` is the indicator word for all unknown words. `unk` can be either in or not in `data`,
  depends on the use case.
 """
-function Vocab(data::AbstractVector, unk::AbstractString="[UNK]")
-    udata = unique!(map(String, data))
+Vocab(data::AbstractVector, unk::AbstractString="[UNK]") = Vocab{String}(data, unk)
+
+"""
+    Vocab{T}(data::AbstractVector, unk) where T
+
+construct Vocab with element type `T`. `unk` must be specified.
+"""
+function Vocab{T}(data::AbstractVector, unk) where T
+    udata = Vector{T}(undef, length(data))
+    unk = T(unk)
+    unique!(map!(T, udata, data))
     list = SizedVector{length(udata)}(udata)
     i = findfirst(==(unk), list)
     unki = isnothing(i) ? 0 : i
-    return Vocab(list, String(unk), unki)
+    return Vocab(list, unk, unki)
 end
 
 Base.length(v::Vocab) = length(v.list)
@@ -33,15 +44,33 @@ function Base.show(io::IO, v::Vocab)
     print(io, ", unki = ", v.unki, ')')
 end
 
-lookup(v::Vocab) = Base.Fix1(lookup,  v)
-lookup(v::Vocab{<:AbstractString}, s::AbstractString) = (i = findfirst(==(s), v.list); isnothing(i) ? v.unki : i)
-lookup(v::Vocab{T}, s::T) where T = (i = findfirst(==(s), v.list); isnothing(i) ? v.unki : i)
-lookup(v::Vocab, i::Integer) = 0 < i <= length(v.list) ? v.list[i] : v.unk
-lookup(v::Vocab, i, j, k...) = (lookup(v, i), lookup(v, j), map(lookup(v), k)...)
-lookup(v::Vocab, is::AbstractArray) = map(lookup(v), is)
+_lookup_index(list, unki, s) = (i = findfirst(==(s), list); isnothing(i) ? unki : i)
+_lookup_word(list, unk, i) = 0 < i <= length(list) ? list[i] : unk
 
-lookup(::Type{OneHot}, v::Vocab) = lookup $ OneHot $ v
-lookup(::Type{OneHot}, v::Vocab, i) = OneHot(length(v))(lookup(v, i))
+lookup(v::Vocab) = Base.Fix1(lookup,  v)
+lookup(::Type{T}, v::Vocab) where T = lookup $ T $ v
+lookup(::Type{I}, v::Vocab{T}, s::T) where {T, I<:Integer} = I(_lookup_index(v.list, v.unki, s))
+lookup(::Type{I}, v::Vocab{<:AbstractString}, s::AbstractString) where I<:Integer = I(_lookup_index(v.list, v.unki, s))
+lookup(::Type{T}, v::Vocab{T}, i::Integer) where T = _lookup_word(v.list, v.unk, i)
+lookup(::Type{<:Integer}, v::Vocab{T}, i::Integer) where T = throw(DomainError(i, "Cannot lookup the value $i in the vocabulary: value should have the same type as Vocab's element type ($(eltype(v)))"))
+
+lookup(v::Vocab{<:AbstractString}, s::AbstractString) = lookup(Int, v, s)
+lookup(v::Vocab{T}, s::T) where T = lookup(Int, v, s)
+
+lookup(v::Vocab, i::Integer) = lookup(eltype(v), v, i)
+lookup(v::Vocab, i, j, k...) = (lookup(v, i), lookup(v, j), map(lookup(v), k)...)
+lookup(v::Vocab, is::Union{AbstractArray, Tuple, NamedTuple}) = map(lookup(v), is)
+
+lookup(::Type{T}, v::Vocab, i, j, k...) where T = lookup(T, v, (i, j, k...))
+lookup(::Type{T}, v::Vocab, is::Union{AbstractArray, Tuple, NamedTuple}) where T = map(lookup(T, v), is)
+
+# handle Vocab{Int}
+# by default calling lookup(v, i) only do word lookup (i.e. v.list[i]), use lookup(Int, v, i) for index lookup
+lookup(v::Vocab{T}, i::Integer) where T <: Integer = _lookup_word(v.list, v.unk, i)
+lookup(::Type{I}, v::Vocab{<:Integer}, s::Integer) where I<:Integer = I(_lookup_index(v.list, v.unki, s))
+
+# lookup(::Type{OneHot}, v::Vocab) = lookup $ OneHot $ v
+lookup(::Type{OneHot}, v::Vocab, i) = OneHot(length(v))(lookup(UInt32, v, i))
 lookup(T::Type{OneHot}, v::Vocab, is::AbstractArray) = OneHotArray(map(lookup(T, v), is))
 
 function lookup(T::Type{OneHot}, v::Vocab, i, j, k...)
@@ -61,8 +90,6 @@ function lookup(T::Type{OneHot}, v::Vocab, i, j, k...)
     return OneHotArray(arr)
 end
 
-lookup(::Type{OneHot}, v::Vocab, i::Integer) = (s = lookup(v, i); throw(DomainError(s, "cannot convert `lookup(::Vocab, $i)` = $(repr(s)) into one-hot representation.")))
-
 lookup(v::Vocab, i::OneHot) = lookup(v, Int(i))
 lookup(v::Vocab, i::OneHotArray) = lookup(v, reinterpret(UInt32, i))
 
@@ -75,6 +102,9 @@ Lookup `x` in `v`. `lookup` words depends on the type of `x`. If `x` is an integ
  if `x` is out-of-bound (`v.unk`). If `x` is a string, return the indice of `x` in the vocabulary
  list (i.e `findfirst(==(x), v.list`) and return the unknown indice if `x` not found in the list.
  If the unknown word `v.unk` is in the list, the unknown indice is its indice, otherwise 0.
+
+This function is bidirectional except for `Vocab{<:Integer}`. For integer vocabulary, this function
+ only get the `x`-th word (`v.list[x]`). Use `lookup(Int, v, x)` for explicit indice lookup.
 
 # Example
 ```julia
@@ -105,6 +135,45 @@ julia> lookup(vocab_unk, 10000)
 ```
 """
 function lookup end
+
+@eval $((@macroexpand @doc """
+    lookup(Int, v::Vocab, x)
+
+The explicit version of `lookup(v, x)`. Lookup the indice of `x` in the vocabulary
+ list. `x` should have the same type as Vocab's element type.
+
+# Example
+```julia
+julia> vocab_unk = Vocab(["a", "b", "xxx"], "xxx")
+Vocab{String, StaticArrays.SizedVector{3, String, Vector{String}}}(size = 3, unk = xxx, unki = 3)
+
+julia> lookup(Int, vocab_unk, "b")
+2
+
+```
+"""
+function lookup(Int, v::Vocab, x) end
+).args[2])
+
+@eval $((@macroexpand @doc """
+    lookup(::Type{T}, v::Vocab{T}, i::Integer) where T
+
+The explicit version of `lookup(v, i)`. Lookup the word at index `i` on vocabulary
+ list. `T` should be the same type as Vocab's element type. This method won't
+ work on integer vocab, use `lookup(v, i)` directly.
+
+# Example
+```julia
+julia> vocab_unk = Vocab(["a", "b", "xxx"], "xxx")
+Vocab{String, StaticArrays.SizedVector{3, String, Vector{String}}}(size = 3, unk = xxx, unki = 3)
+
+julia> lookup(String, vocab_unk, 1)
+"a"
+
+```
+"""
+lookup(::Type{T}, v::Vocab{T}, i::Integer) where T
+).args[2])
 
 @eval $((@macroexpand @doc """
     lookup(v::Vocab, is::AbstractArray)
