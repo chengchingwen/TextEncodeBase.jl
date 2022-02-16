@@ -16,7 +16,7 @@ include("./match.jl")
 include("./tkrs.jl")
 
 # vocab
-export Vocab, lookup, OneHot, OneHotArray
+export AbstractVocabulary, Vocab, lookup, OneHot, OneHotArray
 
 include("./vocab.jl")
 
