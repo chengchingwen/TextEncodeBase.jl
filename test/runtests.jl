@@ -218,11 +218,11 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
         end
 
         @testset "@stage" begin
-            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage SomeStage{A})
-            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage SomeStage{A, B, C})
-            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage SomeStage{A, B} <: C D)
-            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage 3)
-            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage SomeStage{A}())
+            @test_throws Exception @macroexpand(TextEncodeBase.@stage SomeStage{A})
+            @test_throws Exception @macroexpand(TextEncodeBase.@stage SomeStage{A, B, C})
+            @test_throws Exception @macroexpand(TextEncodeBase.@stage SomeStage{A, B} <: C D)
+            @test_throws Exception @macroexpand(TextEncodeBase.@stage 3)
+            @test_throws Exception @macroexpand(TextEncodeBase.@stage SomeStage{A}())
 
             @test_nowarn @macroexpand(TextEncodeBase.@stage SomeStage)
             @test_nowarn @macroexpand(TextEncodeBase.@stage SomeStage{A, B} <: TokenStages)
@@ -392,7 +392,7 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
         @inferred ps(0.5)
 
         @test collect(ps) == [p1, p2]
-        @test_throws ErrorException Pipeline{()}(identity)
-        @test_throws ErrorException Pipelines(())
+        @test_throws Exception Pipeline{()}(identity)
+        @test_throws Exception Pipelines(())
     end
 end
