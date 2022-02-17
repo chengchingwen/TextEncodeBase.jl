@@ -216,6 +216,17 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test nestedcall(getvalue, tkr(word)) == ["w", "o", "r", "d"]
             @test nestedcall(getmeta, tkr(word)) == map(NamedTuple{(:word_id, :token_id)}, zip(r(1, 4), 1:4))
         end
+
+        @testset "@stage" begin
+            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage SomeStage{A})
+            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage SomeStage{A, B, C})
+            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage SomeStage{A, B} <: C D)
+            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage 3)
+            @test_throws ErrorException @macroexpand(TextEncodeBase.@stage SomeStage{A}())
+
+            @test_nowarn @macroexpand(TextEncodeBase.@stage SomeStage)
+            @test_nowarn @macroexpand(TextEncodeBase.@stage SomeStage{A, B} <: TokenStages)
+        end
     end
 
     @testset "Vocabulary" begin
@@ -369,5 +380,19 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
         s(x) = mapfoldl(y->split(y,""), append!, split(x); init=String[])
         @test encode(enc, sentence) == reshape(lookup(OneHot, vocab, s(sentence.x)), Val(3))
         @test decode(enc, encode(enc, sentence)) == lookup(vocab, reshape(lookup(OneHot, vocab, s(sentence.x)), Val(3)))
+    end
+
+    @testset "Pipelines" begin
+        p1 = Pipeline{:x}((x, _)->x)
+        p2 = Pipeline{(:sinx, :cosx)}((x, _)->sincos(x))
+        ps = Pipelines(p1, p2)
+
+        @inferred p1(0.3)
+        @inferred p2(0.5)
+        @inferred ps(0.5)
+
+        @test collect(ps) == [p1, p2]
+        @test_throws ErrorException Pipeline{()}(identity)
+        @test_throws ErrorException Pipelines(())
     end
 end
