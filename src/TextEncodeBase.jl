@@ -26,4 +26,9 @@ export AbstractTextEncoder, TextEncoder, encode, decode
 
 include("./encode.jl")
 
+export Pipeline, Pipelines
+
+include("./pipeline.jl")
+
+
 end
