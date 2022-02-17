@@ -41,7 +41,7 @@ Create a pipeline function with name. When calling the pipeline function, mark t
 julia> p = Pipeline{:x}() do x, _
            2x
        end
-Pipeline{:x, var"#7#8"}(var"#7#8"())
+Pipeline{x}(#29)
 
 julia> p(3)
 (x = 6,)
@@ -49,13 +49,13 @@ julia> p(3)
 julia> p = Pipeline{:x}() do x, y
            y.a * x
        end
-Pipeline{:x, var"#9#10"}(var"#9#10"())
+Pipeline{x}(#31)
 
 julia> p(2, (a=3, b=5))
 (a = 3, b = 5, x = 6)
 
 julia> p = Pipeline{(:sinx, :cosx)}((x,y)->sincos(x))
-Pipeline{(:sinx, :cosx), var"#15#16"}(var"#15#16"())
+Pipeline{(:sinx, :cosx)}(#33)
 
 julia> p(0.5)
 (sinx = 0.479425538604203, cosx = 0.8775825618903728)
@@ -74,7 +74,7 @@ Chain of `Pipeline`s.
 
 ```julua
 julia> pipes = Pipelines(Pipeline{:x}((x,y)->x), Pipeline{(:sinx, :cosx)}((x,y)->sincos(x)))
-Pipelines{Tuple{Pipeline{:x, var"#11#13"}, Pipeline{(:sinx, :cosx), var"#12#14"}}}((Pipeline{:x, var"#11#13"}(var"#11#13"()), Pipeline{(:sinx, :cosx), var"#12#14"}(var"#12#14"())))
+Pipelines: Pipeline{x}(#25) => Pipeline{(:sinx, :cosx)}(#26)
 
 julia> pipes(0.3)
 (x = 0.3, sinx = 0.29552020666133955, cosx = 0.955336489125606)
