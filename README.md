@@ -156,6 +156,7 @@ true
 
 
 # define stage for batch of data
+# equivalent to TextEncodeBase.@stage BatchSentence{A<:AbstractVector, M} DocumentStage
 struct BatchSentence{A<:AbstractVector, M} <: TextEncodeBase.DocumentStage
     x::A
     meta::M
@@ -241,7 +242,7 @@ using TextEncodeBase: nestedcall, with_head_tail, trunc_and_pad, nested2batch
 vocab = Vocab(wordpiece.vocab, wordpiece.vocab[wordpiece.unk_idx])
 
 # define encoder with `TextEncoder`
-encoder = TextEncoder(
+enc = TextEncoder(
     itkr, vocab,
     nested2batch ∘ trunc_and_pad(nothing, vocab.unk) ∘ with_head_tail("[CLS]", "[SEP]") ∘ nestedcall(getvalue)
 )
