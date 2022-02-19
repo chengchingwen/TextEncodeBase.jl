@@ -7,6 +7,7 @@ struct Pipeline{name, F}
     end
 end
 Pipeline{name}(f) where name = Pipeline{name, typeof(f)}(f)
+Pipeline{name}(f, n) where name = n == 1 || n == 2 ? Pipeline{name}(ApplyN{n}(f)) : error("attempt to access $n-th argument while pipeline only take 2")
 
 _name(p::Pipeline{name}) where name = name
 
@@ -28,6 +29,12 @@ Base.iterate(ps::Pipelines, state=1) = iterate(ps.pipes, state)
 
 (ps::Pipelines)(x) = foldl((y, p)->p(x, y), ps.pipes; init=NamedTuple())
 
+Base.:(|>)(p1::Pipeline, p2::Pipeline) = Pipelines(p1, p2)
+Base.:(|>)(p1::Pipelines, p2::Pipeline) = Pipelines(p1.pipes..., p2)
+Base.:(|>)(p1::Pipeline, p2::Pipelines) = Pipelines(p1, p2.pipes...)
+Base.:(|>)(p1::Pipelines, p2::Pipelines) = Pipelines(p1.pipes..., p2.pipes...)
+
+
 """
     Pipeline{name}(f)
 
@@ -35,13 +42,19 @@ Create a pipeline function with name. When calling the pipeline function, mark t
  `f` should take two arguemnt: the input and a namedtuple (can be ignored) that the result will be
  merged to. `name` can be either `Symbol` or tuple of `Symbol`s.
 
+
+    Pipeline{name}(f, n) : equivalent to Pipeline{name}((args...)->f(args[n]))
+
+Create a pipline function with name. `f` should take one argument, it will be applied to either
+ the input or namedtuple depend on the value of `n`. `n` should be either `1` or `2`.
+
 # Example
 
 ```julia
-julia> p = Pipeline{:x}() do x, _
+julia> p = Pipeline{:x}(1) do x
            2x
        end
-Pipeline{x}(#29)
+Pipeline{x}((x,_)->#27(x))
 
 julia> p(3)
 (x = 6,)
@@ -54,8 +67,14 @@ Pipeline{x}(#31)
 julia> p(2, (a=3, b=5))
 (a = 3, b = 5, x = 6)
 
-julia> p = Pipeline{(:sinx, :cosx)}((x,y)->sincos(x))
-Pipeline{(:sinx, :cosx)}(#33)
+julia> p = Pipeline{:x}(y->y.a^2, 2)
+Pipeline{x}((_,y)->#29(y))
+
+julia> p(2, (a = 3, b = 5))
+(a = 3, b = 5, x = 9)
+
+julia> p = Pipeline{(:sinx, :cosx)}(sincos, 1)
+Pipeline{(:sinx, :cosx)}((x,_)->sincos(x))
 
 julia> p(0.5)
 (sinx = 0.479425538604203, cosx = 0.8775825618903728)
@@ -83,5 +102,22 @@ julia> pipes(0.3)
 """
 Pipelines
 
-Base.show(io::IO, p::Pipeline) = print(io, "Pipeline{$(_name(p))}($(p.f))")
+function Base.show(io::IO, p::Pipeline)
+    print(io, "Pipeline{$(_name(p))}(")
+    if p.f isa ApplyN
+        n = _nth(p.f)
+        if n == 1
+            f = "(x,_)->$(p.f.f)(x)"
+        elseif n == 2
+            f = "(_,y)->$(p.f.f)(y)"
+        else
+            f = "$(p.f)"
+        end
+    else
+        f = "$(p.f)"
+    end
+    print(io, f)
+    print(io, ')')
+end
+
 Base.show(io::IO, ps::Pipelines) = (print(io, "Pipelines: "); join(io, ps.pipes, " => "))

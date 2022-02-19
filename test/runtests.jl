@@ -383,15 +383,23 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
     end
 
     @testset "Pipelines" begin
-        p1 = Pipeline{:x}((x, _)->x)
+        p1 = Pipeline{:x}((x,_)->x)
         p2 = Pipeline{(:sinx, :cosx)}((x, _)->sincos(x))
-        ps = Pipelines(p1, p2)
+        ps1 = Pipelines(p1, p2)
+        ps2 = Pipelines(Pipeline{:x}(identity, 1), Pipeline{(:sinx, :cosx)}(y->sincos(y.x), 2))
 
+        @test ps1(0.5) == ps2(0.5)
         @inferred p1(0.3)
         @inferred p2(0.5)
-        @inferred ps(0.5)
+        @inferred ps1(0.5)
+        @inferred ps2(0.5)
 
-        @test collect(ps) == [p1, p2]
+        @test p1 |> p2 == ps1
+        @test ps1 |> p1 == Pipelines(p1, p2, p1)
+        @test p1 |> ps1 == Pipelines(p1, p1, p2)
+        @test ps1 |> ps1 == Pipelines(p1, p2, p1, p2)
+        @test collect(ps1) == [p1, p2]
+        @test_throws Exception Pipeline{:x}(identity, 3)
         @test_throws Exception Pipeline{()}(identity)
         @test_throws Exception Pipelines(())
     end

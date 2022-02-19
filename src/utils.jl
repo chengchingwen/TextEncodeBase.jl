@@ -73,13 +73,22 @@ end
 
 # misc
 
-struct FixRest{F, A<:Tuple}
+struct FixRest{F, A<:Tuple} <: Function
     f::F
     arg::A
 end
 FixRest(f, arg...) = FixRest(f, arg)
 
 (f::FixRest)(arg...) = f.f(arg..., f.arg...)
+
+struct ApplyN{N, F} <: Function
+    f::F
+end
+ApplyN{N}(f) where N = ApplyN{N, typeof(f)}(f)
+
+_nth(::ApplyN{N}) where N = N
+
+(f::ApplyN)(args...) = f.f(args[_nth(f)])
 
 nestedcall(f) = Base.Fix1(nestedcall, f)
 nestedcall(f, x::AbstractArray) = map(nestedcall(f), x)
