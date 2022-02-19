@@ -34,6 +34,37 @@ Base.:(|>)(p1::Pipelines, p2::Pipeline) = Pipelines(p1.pipes..., p2)
 Base.:(|>)(p1::Pipeline, p2::Pipelines) = Pipelines(p1, p2.pipes...)
 Base.:(|>)(p1::Pipelines, p2::Pipelines) = Pipelines(p1.pipes..., p2.pipes...)
 
+function __getindex__ end
+
+"""
+    PipeGet{name}()
+
+A special pipeline that get the wanted `name`s from namedtuple.
+
+# Example
+
+```julia
+julia> p = Pipeline{:x}(identity, 1) |> Pipeline{(:sinx, :cosx)}(sincos, 1) |> PipeGet{(:x, :sinx)}()
+Pipelines: Pipeline{x}((x,_)->identity(x)) => Pipeline{(:sinx, :cosx)}((x,_)->sincos(x)) => Pipeline{(:x, :sinx)}(__getindex__)
+
+julia> p(0.5)
+(x = 0.5, sinx = 0.479425538604203)
+
+julia> p = Pipeline{:x}(identity, 1) |> Pipeline{(:sinx, :cosx)}(sincos, 1) |> PipeGet{:sinx}()
+Pipelines: Pipeline{x}((x,_)->identity(x)) => Pipeline{(:sinx, :cosx)}((x,_)->sincos(x)) => Pipeline{(:x, :sinx)}(__getindex__)
+
+julia> p(0.5)
+0.479425538604203
+
+```
+
+"""
+const PipeGet{name} = Pipeline{name, typeof(__getindex__)}
+
+PipeGet{name}() where name = PipeGet{name}(__getindex__)
+
+(p::PipeGet{name})(_, y) where name = y[name]
+
 
 """
     Pipeline{name}(f)

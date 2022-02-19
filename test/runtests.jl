@@ -387,12 +387,17 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
         p2 = Pipeline{(:sinx, :cosx)}((x, _)->sincos(x))
         ps1 = Pipelines(p1, p2)
         ps2 = Pipelines(Pipeline{:x}(identity, 1), Pipeline{(:sinx, :cosx)}(y->sincos(y.x), 2))
+        ps3 = ps2 |> PipeGet{:x}()
+        ps4 = ps2 |> PipeGet{(:x, :sinx)}()
 
         @test ps1(0.5) == ps2(0.5)
+        @test ps3(0.2) == 0.2
+        @test ps4(0.3) == (x = 0.3, sinx = sin(0.3))
         @inferred p1(0.3)
         @inferred p2(0.5)
         @inferred ps1(0.5)
         @inferred ps2(0.5)
+        @inferred ps3(0.5)
 
         @test p1 |> p2 == ps1
         @test ps1 |> p1 == Pipelines(p1, p2, p1)
