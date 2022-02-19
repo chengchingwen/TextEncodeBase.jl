@@ -63,7 +63,11 @@ const PipeGet{name} = Pipeline{name, typeof(__getindex__)}
 
 PipeGet{name}() where name = PipeGet{name}(__getindex__)
 
-(p::PipeGet{name})(_, y) where name = y[name]
+@static if VERSION < v"1.7"
+    (p::PipeGet{name})(_, y) where name = name isa Symbol ? y[name] : NamedTuple{name}(y)
+else
+    (p::PipeGet{name})(_, y) where name = y[name]
+end
 
 
 """
