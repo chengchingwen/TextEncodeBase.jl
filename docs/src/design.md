@@ -38,3 +38,14 @@ The `Vocab` type take two argument, the list of words and a special token for al
  it will return 0 as the index for all unknown words. Therefore, make sure the unknown token is in the
  word list beforehand.
 
+
+## Pipelines
+
+A `Pipelines` is a chain of `Pipeline` and `Pipeline` is a function that take two arguments:
+ the input and a `NamedTuple`. Each `Pipeline` is attached with one or more symbols. It apply
+ a transform function on its arguments, and then the result will be mark with those symbols and
+ produce another `NamedTuple`. After that, the result `NamedTuple` will be merged into the input
+ `NamedTuple`. So the `Pipelines` is a sequence of transform function, and each transform result is
+ marked with given names.
+ 
+ 
