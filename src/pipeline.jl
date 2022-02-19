@@ -98,6 +98,13 @@ Pipelines: Pipeline{x}(#25) => Pipeline{(:sinx, :cosx)}(#26)
 julia> pipes(0.3)
 (x = 0.3, sinx = 0.29552020666133955, cosx = 0.955336489125606)
 
+# or use `|>`
+julia> pipes = Pipeline{:x}((x,y)->x) |> Pipeline{(:sinx, :cosx)}((x,y)->sincos(x))
+Pipelines: Pipeline{x}(#25) => Pipeline{(:sinx, :cosx)}(#26)
+
+julia> pipes(0.3)
+(x = 0.3, sinx = 0.29552020666133955, cosx = 0.955336489125606)
+
 ```
 """
 Pipelines
