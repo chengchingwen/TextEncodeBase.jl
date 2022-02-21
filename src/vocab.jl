@@ -92,6 +92,8 @@ end
 
 lookup(v::Vocab, i::OneHot) = lookup(v, Int(i))
 lookup(v::Vocab, i::OneHotArray) = lookup(v, reinterpret(UInt32, i))
+lookup(::Type{T}, v::Vocab{T}, i::OneHot) where T = lookup(v, i)
+lookup(::Type{T}, v::Vocab{T}, i::OneHotArray) where T = lookup(v, i)
 
 
 """
