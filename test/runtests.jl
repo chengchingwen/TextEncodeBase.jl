@@ -380,6 +380,11 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
         s(x) = mapfoldl(y->split(y,""), append!, split(x); init=String[])
         @test encode(enc, sentence) == reshape(lookup(OneHot, vocab, s(sentence.x)), Val(3))
         @test decode(enc, encode(enc, sentence)) == lookup(vocab, reshape(lookup(OneHot, vocab, s(sentence.x)), Val(3)))
+
+        enc2 = TextEncoder(tkr, vocab) do e
+            nested2batch∘TextEncodeBase.process(e)
+        end
+        @test enc == enc2
     end
 
     @testset "Pipelines" begin
