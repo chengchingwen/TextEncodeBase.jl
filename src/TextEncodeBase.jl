@@ -22,13 +22,14 @@ export AbstractVocabulary, Vocab, lookup, OneHot, OneHotArray
 include("./vocab.jl")
 
 # encode
+export Pipeline, Pipelines, PipeGet
+
+include("./pipeline.jl")
+
 export AbstractTextEncoder, TextEncoder, encode, decode
 
 include("./encode.jl")
 
-export Pipeline, Pipelines, PipeGet
-
-include("./pipeline.jl")
 
 
 end
