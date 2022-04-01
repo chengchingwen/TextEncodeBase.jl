@@ -14,6 +14,7 @@ include("./base.jl")
 include("./indexed.jl")
 include("./match.jl")
 include("./tkrs.jl")
+include("./batch.jl")
 include("./macro.jl")
 
 # vocab

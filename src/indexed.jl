@@ -1,9 +1,9 @@
+using Base.Iterators: repeated
+
 mutable struct Offsets
     word::Int
     token::Int
 end
-
-using Base.Iterators: repeated
 
 struct IndexedTokenization{T<:AbstractTokenization} <: WrappedTokenization{T}
     base::T

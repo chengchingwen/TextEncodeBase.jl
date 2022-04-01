@@ -4,7 +4,7 @@ using Test
 using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     BaseTokenization, NestedTokenizer, FlatTokenizer,
     WordTokenization, IndexedTokenization, MatchTokenization,
-    TokenStages, Document, Sentence, Word, Token
+    TokenStages, Document, Sentence, Word, Token, Batch
 using TextEncodeBase: getvalue, getmeta, with_head_tail, trunc_and_pad, nested2batch, nestedcall
 
 using WordTokenizers
@@ -226,6 +226,33 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
 
             @test_nowarn @macroexpand(TextEncodeBase.@stage SomeStage)
             @test_nowarn @macroexpand(TextEncodeBase.@stage SomeStage{A, B} <: TokenStages)
+        end
+
+        @testset "batch" begin
+            tkr = NestedTokenizer(IndexedTokenization())
+            document = document.x
+            sentence = sentence.x
+            another_sentence = "This is another sentence"
+            batch_sentence = [split_sentences(document); sentence; another_sentence]
+            batch_document = [document, sentence, another_sentence]
+            @test nestedcall(getvalue, tkr(Batch{Sentence}(batch_sentence))) == nltk_word_tokenize.(batch_sentence)
+            @test nestedcall(getmeta, tkr(Batch{Sentence}(batch_sentence))) ==
+                map(enumerate(nltk_word_tokenize.(batch_sentence))) do (i, v)
+                    map(enumerate(v)) do (j, x)
+                        (sentence_id = i, word_id = j, token_id = j)
+                    end
+                end
+            @test nestedcall(getvalue, tkr(Batch{Document}(batch_document))) == map(batch_document) do doc
+                nltk_word_tokenize.(split_sentences(doc))
+            end
+            @test nestedcall(getmeta, tkr(Batch{Document}(batch_document))) ==
+                map(enumerate(split_sentences.(batch_document))) do (i, d)
+                    map(enumerate(nltk_word_tokenize.(d))) do (j, s)
+                        map(enumerate(s)) do (k, x)
+                            (document_id = i, sentence_id = j, word_id = k, token_id = k)
+                        end
+                    end
+                end
         end
     end
 
