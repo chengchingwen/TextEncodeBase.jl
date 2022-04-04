@@ -27,7 +27,19 @@ Pipelines(p1, ps...) = Pipelines((p1, ps...))
 Base.length(ps::Pipelines) = length(ps.pipes)
 Base.iterate(ps::Pipelines, state=1) = iterate(ps.pipes, state)
 
-(ps::Pipelines)(x) = foldl((y, p)->p(x, y), ps.pipes; init=NamedTuple())
+@inline Base.getindex(ps::Pipelines, i) = ps.pipes[i]
+
+function (ps::Pipelines{T})(x) where T
+    if @generated
+        body = Expr[ :(y = ps[$n](x, y)) for n = 1:fieldcount(T)]
+        return quote
+            y = NamedTuple()
+            $(body...)
+        end
+    else
+        foldl((y, p)->p(x, y), ps.pipes; init=NamedTuple())
+    end
+end
 
 Base.:(|>)(p1::Pipeline, p2::Pipeline) = Pipelines(p1, p2)
 Base.:(|>)(p1::Pipelines, p2::Pipeline) = Pipelines(p1.pipes..., p2)
