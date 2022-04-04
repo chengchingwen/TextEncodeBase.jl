@@ -70,8 +70,11 @@ lookup(v::Vocab{T}, i::Integer) where T <: Integer = _lookup_word(v.list, v.unk,
 lookup(::Type{I}, v::Vocab{<:Integer}, s::Integer) where I<:Integer = I(_lookup_index(v.list, v.unki, s))
 
 # lookup(::Type{OneHot}, v::Vocab) = lookup $ OneHot $ v
-lookup(::Type{OneHot}, v::Vocab, i) = OneHot(length(v))(lookup(UInt32, v, i))
-lookup(T::Type{OneHot}, v::Vocab, is::AbstractArray) = OneHotArray(map(lookup(T, v), is))
+lookup(::Type{OneHot}, v::Vocab, i) = lookup_onehot(v, i)
+lookup(T::Type{OneHot}, v::Vocab, is::AbstractArray) = OneHotArray{length(v)}(lookup_onehot(v, is))
+
+lookup_onehot(v::Vocab, i) = OneHot(length(v))(lookup(UInt32, v, i))
+lookup_onehot(v::Vocab, is::AbstractArray) = map(lookup_onehot $ v, is)
 
 function lookup(T::Type{OneHot}, v::Vocab, i, j, k...)
     c = 0
