@@ -362,7 +362,7 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test with_head_tail(tail=6)(x) == collect(1:6)
             @test with_head_tail(head=0)(x) == collect(0:5)
 
-            @test with_head_tail([[x], 1:5, 2:3], -1, -2) == [[[-1;x;-2]], [-1; 1:5; -2], [-1; 2:3; -2]]
+            @test with_head_tail(AbstractVector[[x], 1:5, 2:3], -1, -2) == [[[-1;x;-2]], [-1; 1:5; -2], [-1; 2:3; -2]]
         end
 
         @testset "trunc_and_pad" begin
@@ -377,8 +377,8 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test trunc_and_pad(nothing, 0)(x) == collect(1:9)
             @test trunc_and_pad(nothing, 0)(1:3) == collect(1:3)
 
-            @test trunc_and_pad([[x], 1:5, 2:3], 7, -1) == [[collect(1:7)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
-            @test trunc_and_pad([[x], 1:5, 2:3], nothing, -1) == [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
+            @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], 7, -1) == [[collect(1:7)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
+            @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1) == [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
         end
 
         @testset "nested2batch" begin
