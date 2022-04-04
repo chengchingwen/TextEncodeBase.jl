@@ -94,6 +94,37 @@ nestedcall(f) = Base.Fix1(nestedcall, f)
 nestedcall(f, x::AbstractArray) = map(nestedcall(f), x)
 nestedcall(f, x) = f(x)
 
+function _nestedcall_f!(f, ys, xs)
+    @inbounds for i in eachindex(xs, ys)
+        ys[i] = nestedcall(f, xs[i])
+    end
+    return ys
+end
+
+function _nestedcall_f_fallback!(f, ys, xs)
+    S = Union{}
+    @inbounds for i in eachindex(xs, ys)
+        ys[i] = nestedcall(f, xs[i])
+        S = promote_type(S, typeof(ys[i]))
+    end
+    return S, ys
+end
+
+function nestedcall(f, xs::Array)
+    R = Core.Compiler.return_type(nestedcall, Tuple{typeof(f), eltype(xs)})
+    if Base.isconcretetype(R)
+        return _nestedcall_f!(f, similar(xs, R), xs)
+    else
+        S, ys = _nestedcall_f_fallback!(f, similar(xs, R), xs)
+        if S != R
+            zs = similar(xs, S)
+            copyto!(zs, ys)
+            return zs
+        end
+        return ys
+    end
+end
+
 # encode utils
 
 """
