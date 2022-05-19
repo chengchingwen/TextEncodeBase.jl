@@ -51,8 +51,6 @@ Base.:(|>)(p1::Pipelines, p2::Pipeline) = Pipelines(p1.pipes..., p2)
 Base.:(|>)(p1::Pipeline, p2::Pipelines) = Pipelines(p1, p2.pipes...)
 Base.:(|>)(p1::Pipelines, p2::Pipelines) = Pipelines(p1.pipes..., p2.pipes...)
 
-function __getindex__ end
-
 """
     PipeGet{name}()
 
@@ -85,12 +83,7 @@ julia> p(0.5)
 const PipeGet{name} = Pipeline{name, typeof(__getindex__)}
 
 PipeGet{name}() where name = PipeGet{name}(__getindex__)
-
-@static if VERSION < v"1.7"
-    (p::PipeGet{name})(_, y) where name = name isa Symbol ? y[name] : NamedTuple{name}(y)
-else
-    (p::PipeGet{name})(_, y) where name = y[name]
-end
+(p::PipeGet{name})(_, y) where name = __getindex__(y, name)
 
 
 """
@@ -138,7 +131,7 @@ julia> p(2, (a = 3, b = 5))
 (a = 3, b = 5, x = 9)
 
 julia> p = Pipeline{(:sinx, :cosx)}(sincos, 1)
-Pipeline{(:sinx, :cosx)}(sincos(source))
+Pipeline{(sinx, cosx)}(sincos(source))
 
 julia> p(0.5)
 (sinx = 0.479425538604203, cosx = 0.8775825618903728)

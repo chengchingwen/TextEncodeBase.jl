@@ -73,6 +73,12 @@ end
 
 # misc
 
+@static if VERSION < v"1.7"
+    @inline __getindex__(nt::NamedTuple, name) = name isa Symbol ? nt[name] : NamedTuple{name}(nt)
+else
+    @inline __getindex__(nt::NamedTuple, name) = nt[name]
+end
+
 struct FixRest{F, A<:Tuple} <: Function
     f::F
     arg::A
@@ -100,9 +106,9 @@ _syms(::ApplySyms{S}) where S = S
 function (f::ApplySyms)(nt::NamedTuple)
     s = _syms(f)
     if s isa Tuple
-        f.f(nt[s]...)
+        f.f(__getindex__(nt, s)...)
     else
-        f.f(nt[s])
+        f.f(__getindex__(nt,s))
     end
 end
 
