@@ -198,7 +198,7 @@ function show_pipeline_function(io::IO, c::ComposedFunction, nested=false)
     end
 end
 show_pipeline_function(io::IO, f, _) = show_pipeline_function(io, f)
-show_pipeline_function(io::IO, f) = show(io, f)
+show_pipeline_function(io::IO, f) = print(io, f)
 
 function _show_pipeline_fixf(io::IO, g, name)
     if g isa Base.Fix1
@@ -232,10 +232,10 @@ function show_pipeline_function(io::IO, p::Pipeline)
                 _show_pipeline_fixf(io, g, :target)
             end
         else
-            show(io, p.f)
+            print(io, p.f)
         end
     else
-        show(io, p.f)
+        print(io, p.f)
         print(io, "(source, target)")
     end
 end
