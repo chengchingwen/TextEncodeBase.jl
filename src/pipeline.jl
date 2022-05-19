@@ -7,7 +7,10 @@ struct Pipeline{name, F}
     end
 end
 Pipeline{name}(f) where name = Pipeline{name, typeof(f)}(f)
-Pipeline{name}(f, n) where name = n == 1 || n == 2 ? Pipeline{name}(ApplyN{n}(f)) : error("attempt to access $n-th argument while pipeline only take 2")
+Pipeline{name}(f::ApplyN{N}) where {name, N} = (N == 1 || N == 2) ? Pipeline{name, typeof(f)}(f) : error("attempt to access $n-th argument while pipeline only take 2")
+
+Pipeline{name}(f, n::Int) where name = Pipeline{name}(ApplyN{n}(f))
+Pipeline{name}(f, syms::Union{Symbol, Tuple{Vararg{Symbol}}}) where name = Pipeline{name}(ApplySyms{syms}(f), 2)
 
 _name(p::Pipeline{name}) where name = name
 
@@ -26,6 +29,8 @@ Pipelines(p1, ps...) = Pipelines((p1, ps...))
 
 Base.length(ps::Pipelines) = length(ps.pipes)
 Base.iterate(ps::Pipelines, state=1) = iterate(ps.pipes, state)
+Base.firstindex(ps::Pipelines) = firstindex(ps.pipes)
+Base.lastindex(ps::Pipelines) = lastindex(ps.pipes)
 
 @inline Base.getindex(ps::Pipelines, i) = ps.pipes[i]
 

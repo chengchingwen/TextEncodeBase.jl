@@ -90,6 +90,22 @@ _nth(::ApplyN{N}) where N = N
 
 (f::ApplyN)(args...) = f.f(args[_nth(f)])
 
+struct ApplySyms{S, F} <: Function
+    f::F
+end
+ApplySyms{S}(f) where S = ApplySyms{S, typeof(f)}(f)
+
+_syms(::ApplySyms{S}) where S = S
+
+function (f::ApplySyms)(nt::NamedTuple)
+    s = _syms(f)
+    if s isa Tuple
+        f.f(nt[s]...)
+    else
+        f.f(nt[s])
+    end
+end
+
 nestedcall(f) = Base.Fix1(nestedcall, f)
 nestedcall(f, x::AbstractArray) = map(nestedcall(f), x)
 nestedcall(f, x) = f(x)
