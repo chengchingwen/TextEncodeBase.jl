@@ -264,6 +264,17 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
                     end
                 end
         end
+
+        @testset "show" begin
+            @test sprint(show, FlatTokenizer()) == "FlatTokenizer(default)"
+            @test sprint(show, FlatTokenizer(WordTokenization(tokenize=poormans_tokenize))) == "FlatTokenizer(WordTokenization(split_sentences = WordTokenizers.split_sentences, tokenize = WordTokenizers.poormans_tokenize))"
+            @test sprint(show, FlatTokenizer(IndexedTokenization())) == "FlatTokenizer(IndexedTokenization(default))"
+            @test sprint(show, FlatTokenizer(MatchTokenization([r"\d", r"en"]))) == "FlatTokenizer(MatchTokenization(default, patterns = Regex[r\"\\d\", r\"en\"]))"
+            @test sprint(show, FlatTokenizer(IndexedTokenization(MatchTokenization([r"\d", r"en"])))) == "FlatTokenizer(IndexedTokenization(MatchTokenization(default, patterns = Regex[r\"\\d\", r\"en\"])))"
+            @test sprint(show, NestedTokenizer(IndexedTokenization())) == "NestedTokenizer(IndexedTokenization(default))"
+            @test sprint(show, FlatTokenizer(IndexedTokenization(CharTk()))) == "FlatTokenizer(IndexedTokenization(CharTk))"
+            @test sprint(show, NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk(), [r"\d", r"en"])))) == "NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk, patterns = Regex[r\"\\d\", r\"en\"])))"
+        end
     end
 
     @testset "Vocabulary" begin
@@ -429,19 +440,27 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
     @testset "Pipelines" begin
         p1 = Pipeline{:x}((x,_)->x)
         p2 = Pipeline{(:sinx, :cosx)}((x, _)->sincos(x))
+        p3 = Pipeline{:z}(x->3x+5, :x)
         ps1 = Pipelines(p1, p2)
         ps2 = Pipelines(Pipeline{:x}(identity, 1), Pipeline{(:sinx, :cosx)}(y->sincos(y.x), 2))
         ps3 = ps2 |> PipeGet{:x}()
         ps4 = ps2 |> PipeGet{(:x, :sinx)}()
+        ps5 = p1 |> p2 |> Pipeline{:xsinx}(*, (:x, :sinx))
 
+        @test ps5[begin:end] == ps5.pipes
+
+        @test p3(0, (x = 2,)) == (x = 2, z = 11)
         @test ps1(0.5) == ps2(0.5)
         @test ps3(0.2) == 0.2
         @test ps4(0.3) == (x = 0.3, sinx = sin(0.3))
+        @test ps5(0.7) == (x = 0.7, sinx = sin(0.7), cosx = cos(0.7), xsinx = 0.7*sin(0.7))
         @test_inferred p1(0.3)
         @test_inferred p2(0.5)
+        @test_inferred p3(0, (x = 2,))
         @test_inferred ps1(0.5)
         @test_inferred ps2(0.5)
         @test_inferred ps3(0.5)
+        @test_inferred ps5(0.5)
 
         @test p1 |> p2 == ps1
         @test ps1 |> p1 == Pipelines(p1, p2, p1)
@@ -451,5 +470,27 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
         @test_throws Exception Pipeline{:x}(identity, 3)
         @test_throws Exception Pipeline{()}(identity)
         @test_throws Exception Pipelines(())
+
+        @testset "show" begin
+            @test sprint(show, Pipeline{:x}(-, 1)) == "Pipeline{x}(-(source))"
+            @test sprint(show, Pipeline{(:sinx, :cosx)}(sincos, 1)) == "Pipeline{(sinx, cosx)}(sincos(source))"
+            @test sprint(show, Pipeline{(:sinx, :cosx)}(sincos, :x)) == "Pipeline{(sinx, cosx)}(sincos(target.x))"
+            @test sprint(show, Pipeline{(:tanx, :tany)}(Base.Fix1(map, tan), 2)) == "Pipeline{(tanx, tany)}(map(tan, target))"
+            @test sprint(show, Pipeline{:x2}(Base.Fix2(/, 2), :x)) == "Pipeline{x2}(/(target.x, 2))"
+            @test sprint(show, Pipeline{:z}(sin∘cos, :x)) == "Pipeline{z}((sin ∘ cos)(target.x))"
+            @test sprint(show, Pipeline{:z}(Base.Fix1(*, 2) ∘ Base.Fix2(+, 1))) == "Pipeline{z}(((x->*(2, x)) ∘ (x->+(x, 1)))(source, target))"
+            @test sprint(show, Pipeline{:tok}(trunc_and_pad(nothing, 0), :tok)) == "Pipeline{tok}(trunc_and_pad(nothing, 0)(target.tok))"
+            @test sprint(show, PipeGet{:x}()) == "Pipeline{x}((target.x))"
+            @test sprint(show, PipeGet{(:a, :b)}()) == "Pipeline{(a, b)}((target.a, target.b))"
+
+            foo(x, y) = x * y.sinx
+            @test sprint(
+                show,
+                Pipeline{:x}(identity, 1) |> Pipeline{(:sinx, :cosx)}(sincos, :x) |>
+                Pipeline{:xsinx}(foo) |> PipeGet{(:cosx, :xsinx)}()
+                ; context=:compact=>true
+            ) ==
+                "Pipelines(target[x] := identity(source); target[(sinx, cosx)] := sincos(target.x); target[xsinx] := foo(source, target); target := (target.cosx, target.xsinx))"
+        end
     end
 end

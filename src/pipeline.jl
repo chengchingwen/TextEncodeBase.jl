@@ -184,10 +184,34 @@ julia> pipes(0.3)
 Pipelines
 
 # display
+@nospecialize
 
-show_pipeline_function(io::IO, f1::Base.Fix1) = print(io, f1.f, '(', f1.x, ')')
-show_pipeline_function(io::IO, f2::Base.Fix2) = print(io, "(x)->", f2.f, "(x, ", f2.x, ')')
-show_pipeline_function(io::IO, fr::FixRest) = (print(io, fr.f, '('); join(io, fr.arg, ", "); print(io, ')'))
+function show_pipeline_function(io::IO, f1::Base.Fix1)
+    print(io, "(x->")
+    show_pipeline_function(io, f1.f)
+    print(io, '(', f1.x, ", x))")
+end
+function show_pipeline_function(io::IO, f2::Base.Fix2)
+    print(io, "(x->")
+    show_pipeline_function(io, f2.f)
+    print(io, "(x, ", f2.x, "))")
+end
+function show_pipeline_function(io::IO, a::ApplyN)
+    print(io, "(args...->")
+    show_pipeline_function(io, a.f)
+    print(io, "(args[", _nth(a), "]))")
+end
+function show_pipeline_function(io::IO, a::ApplySyms)
+    print(io, "((; kwargs...)->")
+    show_pipeline_function(io, a.f)
+    print(io, "(kwargs[", '(', _syms(a), ')', "]...))")
+end
+function show_pipeline_function(io::IO, fr::FixRest)
+    show_pipeline_function(io, fr.f)
+    print(io, '(')
+    join(io, fr.arg, ", ")
+    print(io, ')')
+end
 function show_pipeline_function(io::IO, c::ComposedFunction, nested=false)
     if nested
         show_pipeline_function(io, c.outer, nested)
@@ -219,15 +243,8 @@ function show_pipeline_function(io::IO, p::Pipeline)
             _show_pipeline_fixf(io, g, :source)
         elseif n == 2
             if g isa ApplySyms
-                show_pipeline_function(io, g.f)
                 syms = _syms(g)
-                if syms isa Tuple
-                    print(io, "(target.")
-                    join(io, syms, ", target.")
-                    print(io, ')')
-                else
-                    print(io, "(target.$syms)")
-                end
+                _show_pipeline_fixf(io, g.f, syms isa Tuple ? join(map(x->"target.$x", syms), ", ") : "target.$syms")
             else
                 _show_pipeline_fixf(io, g, :target)
             end
@@ -235,8 +252,7 @@ function show_pipeline_function(io::IO, p::Pipeline)
             print(io, p.f)
         end
     else
-        print(io, p.f)
-        print(io, "(source, target)")
+        _show_pipeline_fixf(io, p.f, "source, target")
     end
 end
 
@@ -252,7 +268,10 @@ function show_pipeline_function(io::IO, p::PipeGet)
 end
 
 function Base.show(io::IO, p::Pipeline)
-    print(io, "Pipeline{$(_name(p))}(")
+    print(io, "Pipeline{")
+    name = _name(p)
+    name isa Tuple ? (print(io, '('); join(io, name, ", "); print(io, ')')) : print(io, name)
+    print(io, "}(")
     show_pipeline_function(io, p)
     print(io, ')')
 end
@@ -295,3 +314,5 @@ function Base.show(io::IO, ps::Pipelines)
     flat = get(io, :compact, false)
     show_pipeline(io, ps; flat, prefix)
 end
+
+@specialize
