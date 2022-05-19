@@ -38,7 +38,7 @@ end
 Base.length(v::Vocab) = length(v.list)
 
 function Base.show(io::IO, v::Vocab)
-    summary(io, v)
+    print(io, "Vocab{", eltype(v), ", ", nameof(typeof(v.list)), '}')
     print(io, "(size = ", length(v))
     print(io, ", unk = ", v.unk)
     print(io, ", unki = ", v.unki, ')')

@@ -62,13 +62,19 @@ A special pipeline that get the wanted `name`s from namedtuple.
 
 ```julia
 julia> p = Pipeline{:x}(identity, 1) |> Pipeline{(:sinx, :cosx)}(sincos, 1) |> PipeGet{(:x, :sinx)}()
-Pipelines: Pipeline{x}((x,_)->identity(x)) => Pipeline{(:sinx, :cosx)}((x,_)->sincos(x)) => Pipeline{(:x, :sinx)}(__getindex__)
+Pipelines:
+  target[x] := identity(source)
+  target[(sinx, cosx)] := sincos(source)
+  target := (target.x, target.sinx)
 
 julia> p(0.5)
 (x = 0.5, sinx = 0.479425538604203)
 
 julia> p = Pipeline{:x}(identity, 1) |> Pipeline{(:sinx, :cosx)}(sincos, 1) |> PipeGet{:sinx}()
-Pipelines: Pipeline{x}((x,_)->identity(x)) => Pipeline{(:sinx, :cosx)}((x,_)->sincos(x)) => Pipeline{(:x, :sinx)}(__getindex__)
+Pipelines:
+  target[x] := identity(source)
+  target[(sinx, cosx)] := sincos(source)
+  target := (target.sinx)
 
 julia> p(0.5)
 0.479425538604203
@@ -95,10 +101,16 @@ Create a pipeline function with name. When calling the pipeline function, mark t
  merged to. `name` can be either `Symbol` or tuple of `Symbol`s.
 
 
-    Pipeline{name}(f, n) : equivalent to Pipeline{name}((args...)->f(args[n]))
+    Pipeline{name}(f, n)
 
-Create a pipline function with name. `f` should take one argument, it will be applied to either
- the input or namedtuple depend on the value of `n`. `n` should be either `1` or `2`.
+Create a pipline function with name. `f` should take one argument, it will be applied to either the input
+ or namedtuple depend on the value of `n`. `n` should be either `1` or `2`. Equivalent to
+ `f(n == 1 ? source : target)`.
+
+    Pipeline{name}(f, syms)
+
+Create a pipline function with name. `syms` can be either a `Symbol` or a tuple of `Symbol`s.
+ Equivalent to `f(target[syms])` or `f(target[syms]...)` depends on the type of `syms`.
 
 # Example
 
@@ -106,7 +118,7 @@ Create a pipline function with name. `f` should take one argument, it will be ap
 julia> p = Pipeline{:x}(1) do x
            2x
        end
-Pipeline{x}((x,_)->#27(x))
+Pipeline{x}(var"#19#20"()(source))
 
 julia> p(3)
 (x = 6,)
@@ -114,22 +126,28 @@ julia> p(3)
 julia> p = Pipeline{:x}() do x, y
            y.a * x
        end
-Pipeline{x}(#31)
+Pipeline{x}(var"#21#22"()(source, target))
 
 julia> p(2, (a=3, b=5))
 (a = 3, b = 5, x = 6)
 
 julia> p = Pipeline{:x}(y->y.a^2, 2)
-Pipeline{x}((_,y)->#29(y))
+Pipeline{x}(var"#23#24"()(target))
 
 julia> p(2, (a = 3, b = 5))
 (a = 3, b = 5, x = 9)
 
 julia> p = Pipeline{(:sinx, :cosx)}(sincos, 1)
-Pipeline{(:sinx, :cosx)}((x,_)->sincos(x))
+Pipeline{(:sinx, :cosx)}(sincos(source))
 
 julia> p(0.5)
 (sinx = 0.479425538604203, cosx = 0.8775825618903728)
+
+julia> p = Pipeline{:z}((x, y)-> 2x+y, (:x, :y))
+Pipeline{z}(var"#33#34"()(target.x, target.y))
+
+julia> p(0, (x=3, y=5))
+(x = 3, y = 5, z = 11)
 
 ```
 
@@ -145,14 +163,18 @@ Chain of `Pipeline`s.
 
 ```julua
 julia> pipes = Pipelines(Pipeline{:x}((x,y)->x), Pipeline{(:sinx, :cosx)}((x,y)->sincos(x)))
-Pipelines: Pipeline{x}(#25) => Pipeline{(:sinx, :cosx)}(#26)
+Pipelines:
+  target[x] := var"#25#27"()(source, target)
+  target[(sinx, cosx)] := var"#26#28"()(source, target)
 
 julia> pipes(0.3)
 (x = 0.3, sinx = 0.29552020666133955, cosx = 0.955336489125606)
 
 # or use `|>`
 julia> pipes = Pipeline{:x}((x,y)->x) |> Pipeline{(:sinx, :cosx)}((x,y)->sincos(x))
-Pipelines: Pipeline{x}(#25) => Pipeline{(:sinx, :cosx)}(#26)
+Pipelines:
+  target[x] := var"#29#31"()(source, target)
+  target[(sinx, cosx)] := var"#30#32"()(source, target)
 
 julia> pipes(0.3)
 (x = 0.3, sinx = 0.29552020666133955, cosx = 0.955336489125606)
@@ -161,22 +183,115 @@ julia> pipes(0.3)
 """
 Pipelines
 
-function Base.show(io::IO, p::Pipeline)
-    print(io, "Pipeline{$(_name(p))}(")
+# display
+
+show_pipeline_function(io::IO, f1::Base.Fix1) = print(io, f1.f, '(', f1.x, ')')
+show_pipeline_function(io::IO, f2::Base.Fix2) = print(io, "(x)->", f2.f, "(x, ", f2.x, ')')
+show_pipeline_function(io::IO, fr::FixRest) = (print(io, fr.f, '('); join(io, fr.arg, ", "); print(io, ')'))
+function show_pipeline_function(io::IO, c::ComposedFunction, nested=false)
+    if nested
+        show_pipeline_function(io, c.outer, nested)
+        print(io, " ∘ ")
+        show_pipeline_function(io, c.inner, nested)
+    else
+        print(io, '(', sprint(show_pipeline_function, c, true), ')')
+    end
+end
+show_pipeline_function(io::IO, f, _) = show_pipeline_function(io, f)
+show_pipeline_function(io::IO, f) = show(io, f)
+
+function _show_pipeline_fixf(io::IO, g, name)
+    if g isa Base.Fix1
+        print(io, g.f, '(', g.x, ", ", name, ')')
+    elseif g isa Base.Fix2
+        print(io, g.f, '(', name, ", ", g.x, ')')
+    else
+        show_pipeline_function(io, g)
+        print(io, '(', name, ')')
+    end
+end
+
+function show_pipeline_function(io::IO, p::Pipeline)
     if p.f isa ApplyN
         n = _nth(p.f)
+        g = p.f.f
         if n == 1
-            f = "(x,_)->$(p.f.f)(x)"
+            _show_pipeline_fixf(io, g, :source)
         elseif n == 2
-            f = "(_,y)->$(p.f.f)(y)"
+            if g isa ApplySyms
+                show_pipeline_function(io, g.f)
+                syms = _syms(g)
+                if syms isa Tuple
+                    print(io, "(target.")
+                    join(io, syms, ", target.")
+                    print(io, ')')
+                else
+                    print(io, "(target.$syms)")
+                end
+            else
+                _show_pipeline_fixf(io, g, :target)
+            end
         else
-            f = "$(p.f)"
+            show(io, p.f)
         end
     else
-        f = "$(p.f)"
+        show(io, p.f)
+        print(io, "(source, target)")
     end
-    print(io, f)
+end
+
+function show_pipeline_function(io::IO, p::PipeGet)
+    name = _name(p)
+    if name isa Tuple
+        print(io, "(target.")
+        join(io, name, ", target.")
+        print(io, ')')
+    else
+        print(io, "(target.$name)")
+    end
+end
+
+function Base.show(io::IO, p::Pipeline)
+    print(io, "Pipeline{$(_name(p))}(")
+    show_pipeline_function(io, p)
     print(io, ')')
 end
 
-Base.show(io::IO, ps::Pipelines) = (print(io, "Pipelines: "); join(io, ps.pipes, " => "))
+function show_pipeline(io::IO, ps::Pipelines; flat=false, prefix=nothing)
+    print(io, "Pipelines")
+    flat || print(io, ":\n")
+    n = length(ps.pipes)
+    sprefix = isnothing(prefix) ? "  " : "$prefix"
+    flat && print(io, '(')
+    for (i, p) in enumerate(ps.pipes)
+        flat || print(io, sprefix)
+
+        if p isa PipeGet
+            print(io, "target := ")
+            show_pipeline_function(io, p)
+        else
+            print(io, "target[")
+            name = _name(p)
+            if name isa Symbol
+                print(io, name)
+            else
+                print(io, '(')
+                join(io, name, ", ")
+                print(io, ')')
+            end
+            print(io, "] := ")
+            show_pipeline_function(io, p)
+        end
+
+        if i != n
+            flat ? print(io, "; ") : print(io, '\n')
+        end
+    end
+    flat && print(io, ')')
+end
+
+function Base.show(io::IO, ps::Pipelines)
+    prefix = get(io, :pipeline_display_prefix, nothing)
+    flat = get(io, :compact, false)
+    show_pipeline(io, ps; flat, prefix)
+end

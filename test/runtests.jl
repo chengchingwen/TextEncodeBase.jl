@@ -279,7 +279,7 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
         @test vocab_unk.list == ["a", "b", "xxx"]
         @test vocab_unk.unki == 3
         @test vocab_int.list == collect(11:20)
-        @test sprint(show, vocab_int) == "Vocab{$Int, StaticArrays.SizedVector{10, $Int, Vector{$Int}}}(size = 10, unk = 0, unki = 0)"
+        @test sprint(show, vocab_int) == "Vocab{$Int, SizedArray}(size = 10, unk = 0, unki = 0)"
 
         @testset "lookup" begin
             @test lookup(vocab, "a") == 1

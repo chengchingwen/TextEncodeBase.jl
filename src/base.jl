@@ -276,3 +276,46 @@ preprocess(t::AbstractTokenizer, x::TokenStages) = updatevalue(Base.Fix1(preproc
 preprocess(t::AbstractTokenizer, x) = x
 
 (t::AbstractTokenizer)(x::TS) where {TS <: TokenStages} = tokenize(t, nothing, tokenization(t), preprocess(t, x))
+
+
+function Base.show(io::IO, t::AbstractTokenizer)
+    T = typeof(t)
+    n = fieldcount(T)
+    print(io, nameof(T))
+    if n != 0
+        base = hasfield(T, :tokenization)
+        basei = base ? findfirst(==(:tokenization), fieldnames(T)) : 0
+        print(io,  '(')
+        base && show(io, t.tokenization)
+        for i = 1:n
+            i == basei && continue
+            (!base && i == 1) || print(io, ", ")
+            print(io, fieldname(T, i))
+            print(io, " = ")
+            show(IOContext(io, :limit=>true), getfield(t, i))
+        end
+        print(io, ')')
+    end
+end
+
+function Base.show(io::IO, t::AbstractTokenization)
+    T = typeof(t)
+    n = fieldcount(T)
+    print(io, nameof(T))
+    if n != 0
+        base = hasfield(T, :base)
+        basei = base ? findfirst(==(:base), fieldnames(T)) : 0
+        print(io,  '(')
+        base && show(io, t.base)
+        for i = 1:n
+            i == basei && continue
+            (!base && i == 1) || print(io, ", ")
+            print(io, fieldname(T, i))
+            print(io, " = ")
+            show(IOContext(io, :limit=>true), getfield(t, i))
+        end
+        print(io, ')')
+    end
+end
+
+Base.show(io::IO, ::DefaultTokenization) = print(io, :default)
