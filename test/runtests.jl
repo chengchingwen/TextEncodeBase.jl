@@ -15,7 +15,7 @@ using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     BaseTokenization, NestedTokenizer, FlatTokenizer,
     WordTokenization, IndexedTokenization, MatchTokenization,
     TokenStages, Document, Sentence, Word, Token, Batch
-using TextEncodeBase: getvalue, getmeta, with_head_tail, trunc_and_pad, nested2batch, nestedcall
+using TextEncodeBase: getvalue, getmeta, with_head_tail, trunc_and_pad, trunc_or_pad, nested2batch, nestedcall
 
 using WordTokenizers
 
@@ -374,22 +374,44 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test with_head_tail(head=0)(x) == collect(0:5)
 
             @test with_head_tail(AbstractVector[[x], 1:5, 2:3], -1, -2) == [[[-1;x;-2]], [-1; 1:5; -2], [-1; 2:3; -2]]
+            @test with_head_tail(Any[Any[x], 1:5, 2:3], -1, -2) == [[[-1;x;-2]], [-1; 1:5; -2], [-1; 2:3; -2]]
+            @test with_head_tail(Any[Any[Any[0,1,2]]], 5, 5) == [[[5,0,1,2,5]]]
+        end
+
+        @testset "trunc_or_pad" begin
+            x = collect(1:9)
+            @test trunc_or_pad(x, 5, 0) == collect(1:5)
+            @test trunc_or_pad(1:3, 5, 0) == [1:3; 0; 0]
+            @test trunc_or_pad(x, nothing, 0) == collect(1:9)
+            @test trunc_or_pad(1:3, nothing, 0) == collect(1:3)
+
+            @test trunc_or_pad(5, 0)(x) == collect(1:5)
+            @test trunc_or_pad(5, 0)(1:3) == [1:3; 0; 0]
+            @test trunc_or_pad(nothing, 0)(x) == collect(1:9)
+            @test trunc_or_pad(nothing, 0)(1:3) == collect(1:3)
+
+            @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], 7, -1) == [[collect(1:7)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
+            @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1) == [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
+            @test trunc_or_pad(Any[Any[[0,0], 1:10], [1]], 7, -1) == [[[0; 0; fill(-1,5)], collect(1:7)], [1; fill(-1,6)]]
+            @test trunc_or_pad(Any[Any[Any[0,1,2]]], 5, 0) == [[[0,1,2,0,0]]]
         end
 
         @testset "trunc_and_pad" begin
             x = collect(1:9)
             @test trunc_and_pad(x, 5, 0) == collect(1:5)
-            @test trunc_and_pad(1:3, 5, 0) == [1:3; 0; 0]
+            @test trunc_and_pad(1:3, 5, 0) == [1:3;]
             @test trunc_and_pad(x, nothing, 0) == collect(1:9)
             @test trunc_and_pad(1:3, nothing, 0) == collect(1:3)
 
             @test trunc_and_pad(5, 0)(x) == collect(1:5)
-            @test trunc_and_pad(5, 0)(1:3) == [1:3; 0; 0]
+            @test trunc_and_pad(5, 0)(1:3) == [1:3;]
             @test trunc_and_pad(nothing, 0)(x) == collect(1:9)
             @test trunc_and_pad(nothing, 0)(1:3) == collect(1:3)
 
             @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], 7, -1) == [[collect(1:7)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
             @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1) == [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
+            @test trunc_and_pad(Any[Any[[0,0], 1:10], [1]], 7, -1) == [[[0; 0; fill(-1,5)], collect(1:7)], [1; fill(-1,6)]]
+            @test trunc_and_pad(Any[Any[Any[0,1,2]]], 5, 0) == [[[0,1,2]]]
         end
 
         @testset "nested2batch" begin
@@ -413,10 +435,25 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
                   cat(cat(x_slices[13],x_slices[14],x_slices[15],x_slices[16], dims=2),
                       cat(x_slices[17],x_slices[18],x_slices[19],x_slices[20], dims=2),
                       cat(x_slices[21],x_slices[22],x_slices[23],x_slices[24], dims=2), dims=3)]
+            y4 = Any[Any[Any[x_slices[1],x_slices[2],x_slices[3],x_slices[4]],
+                  Any[x_slices[5],x_slices[6],x_slices[7],x_slices[8]],
+                  Any[x_slices[9],x_slices[10],x_slices[11],x_slices[12]],],
+                 Any[Any[x_slices[13],x_slices[14],x_slices[15],x_slices[16]],
+                  Any[x_slices[17],x_slices[18],x_slices[19],x_slices[20]],
+                  Any[x_slices[21],x_slices[22],x_slices[23],x_slices[24]],]]
+            x_slices_any = [Array{Any}(x[i:i+5-1]) for i in 1:5:length(x)]
+            y5 = [[[x_slices_any[1],x_slices_any[2],x_slices_any[3],x_slices_any[4]],
+                  [x_slices_any[5],x_slices_any[6],x_slices_any[7],x_slices_any[8]],
+                  [x_slices_any[9],x_slices_any[10],x_slices_any[11],x_slices_any[12]],],
+                 [[x_slices_any[13],x_slices_any[14],x_slices_any[15],x_slices_any[16]],
+                  [x_slices_any[17],x_slices_any[18],x_slices_any[19],x_slices_any[20]],
+                  [x_slices_any[21],x_slices_any[22],x_slices_any[23],x_slices_any[24]],]]
 
             @test nested2batch(y) == x
             @test nested2batch(y2) == x
             @test nested2batch(y3) == x
+            @test nested2batch(y4) == x
+            @test nested2batch(y5) == x
 
             @test_throws DimensionMismatch nested2batch([[1:5], 2:6])
         end

@@ -149,10 +149,13 @@ end
 
 # encode utils
 
+allany(f, x) = mapfoldl(f, _allany, x; init=(true, false))
+_allany(a, b) = a[1] & b, a[2] | !b
+
 """
     with_head_tail(x, head, tail)
 
-Return `[head; x; tail]`. Ignored if `head` or `tail` is `nothing`.
+Return `[head; x; tail]`. Ignored if `head` or `tail` is `nothing`. `x` can be nested arrays.
 
 # Example
 
@@ -174,32 +177,54 @@ julia> TextEncodeBase.with_head_tail([1:5, 2:3], -1, -2)
 
 ```
 """
-function with_head_tail(x, head, tail)
-    n, T = length(x), eltype(x)
-    !isnothing(head) && ((n, T) = (n+1, promote_type(T, typeof(head))))
-    !isnothing(tail) && ((n, T) = (n+1, promote_type(T, typeof(tail))))
-    vec = Vector{T}(undef, n); empty!(vec)
+with_head_tail(x::AbstractArray, head, tail) = _with_head_tail(x, head, tail)
+with_head_tail(x::AbstractArray{<:AbstractVector}, head, tail) = map(with_head_tail(head, tail), x)
+function with_head_tail(x::AbstractArray{>:AbstractArray}, head, tail)
+    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
+    if aoa
+        map(with_head_tail(head, tail), x)
+    elseif aov
+        T = mapreduce(typeof, promote_type, x)
+        _with_head_tail(T, x, head, tail)
+    else
+        error("Input array is mixing array and non-array elements")
+    end
+end
+
+with_head_tail(head, tail) = FixRest(with_head_tail, head, tail)
+with_head_tail(x; head=nothing, tail=nothing) = with_head_tail(x, head, tail)
+with_head_tail(; head=nothing, tail=nothing) = with_head_tail(head, tail)
+
+@inline function _with_head_tail(::Type{T}, x, head, tail) where T
+    S = T
+    n = length(x)
+    !isnothing(head) && ((n, S) = (n+1, promote_type(S, typeof(head))))
+    !isnothing(tail) && ((n, S) = (n+1, promote_type(S, typeof(tail))))
+    vec = Vector{S}(undef, n); empty!(vec)
     !isnothing(head) && push!(vec, head)
     append!(vec, x)
     !isnothing(tail) && push!(vec, tail)
     return vec
 end
-with_head_tail(x::AbstractArray{<:AbstractVector}, head, tail) = map(with_head_tail(head, tail), x)
-with_head_tail(head, tail) = FixRest(with_head_tail, head, tail)
-with_head_tail(x; head=nothing, tail=nothing) = with_head_tail(x, head, tail)
-with_head_tail(; head=nothing, tail=nothing) = with_head_tail(head, tail)
+_with_head_tail(x, head, tail) = _with_head_tail(eltype(x), x, head, tail)
 
 """
-    trunc_and_pad(x, n, pad)
+    trunc_or_pad(x, n, pad)
 
-truncate `x` to length `n`, otherwise add `pad` at the end of x until length equal `n`.
- `x` can be either nested or single array (but the element type should not be subtype of abstract array).
- if `n` is `nothing`, the largest length of the nested array will be used.
+Truncate `x` to length `n`, or add `pad` at the end of x until length equal `n`.
+ `x` can be either nested or single array. if `n` is `nothing`, the largest length of
+ the inner-most array will be used.
+
+    trunc_or_pad(n, pad)
+
+Create a function that will return new array with truncated or padded value of the input.
+
+see also: [trunc_and_pad](@ref)
 
 # Example
 
 ```julia
-julia> TextEncodeBase.trunc_and_pad(1:5, 7, -1)
+julia> TextEncodeBase.trunc_or_pad(1:5, 7, -1)
 7-element Vector{Int64}:
   1
   2
@@ -209,23 +234,37 @@ julia> TextEncodeBase.trunc_and_pad(1:5, 7, -1)
  -1
  -1
 
-julia> TextEncodeBase.trunc_and_pad([1:5, 2:7], 7, -1)
+julia> TextEncodeBase.trunc_or_pad([1:5, 2:7], 10, -1)
 2-element Vector{Vector{Int64}}:
- [1, 2, 3, 4, 5, -1, -1]
- [2, 3, 4, 5, 6, 7, -1]
+ [1, 2, 3, 4, 5, -1, -1, -1, -1, -1]
+ [2, 3, 4, 5, 6, 7, -1, -1, -1, -1]
 
-julia> TextEncodeBase.trunc_and_pad([1:5, [2:7, [1:2]]], nothing, -1)
+julia> TextEncodeBase.trunc_or_pad([1:5, [2:7, [1:2]]], nothing, -1)
 2-element Vector{Vector}:
  [1, 2, 3, 4, 5, -1]
  Vector[[2, 3, 4, 5, 6, 7], [[1, 2, -1, -1, -1, -1]]]
 
 ```
 """
-trunc_and_pad(x, n::Integer, pad) = trunc_and_pad!(similar(x, n), x, n, pad)
-trunc_and_pad(x::AbstractArray{<:AbstractVector}, n::Integer, pad) = map(trunc_and_pad(n, pad), x)
-trunc_and_pad(x, ::Nothing, pad) = trunc_and_pad(x, nestedmaxlength(x), pad)
-trunc_and_pad(n, pad) = FixRest(trunc_and_pad, n, pad)
-function trunc_and_pad!(vec, x, n, pad)
+trunc_or_pad(x::AbstractArray, n::Integer, pad) = trunc_or_pad!(similar(x, n), x, n, pad)
+trunc_or_pad(x::AbstractArray{<:AbstractArray}, n::Integer, pad) = map(trunc_or_pad(n, pad), x)
+function trunc_or_pad(x::AbstractArray{>:AbstractArray}, n::Integer, pad)
+    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
+    if aoa
+        map(trunc_or_pad(n, pad), x)
+    elseif aov
+        trunc_or_pad!(similar(x, n), x, n, pad)
+    else
+        error("Input array is mixing array and non-array elements")
+    end
+end
+trunc_or_pad(x, ::Nothing, pad) = trunc_or_pad(x, nestedmaxlength(x), pad)
+
+trunc_or_pad(n, pad) = FixRest(trunc_or_pad, n, pad)
+trunc_or_pad(x; n=nothing, pad) = trunc_or_pad(x, n, pad)
+trunc_or_pad(; n=nothing, pad) = trunc_or_pad(n, pad)
+
+function trunc_or_pad!(vec, x, n, pad)
     if length(x) <= n
         copyto!(vec, x)
         vec[length(x)+1:n] .= pad
@@ -235,16 +274,91 @@ function trunc_and_pad!(vec, x, n, pad)
     return vec
 end
 
+"""
+    trunc_and_pad(x, maxn, pad)
+
+Truncate `x` if length exceed `maxn`, and add `pad` at the end of x until all length are the same.
+ `x` can be either nested or single array. If `maxn` is `nothing`, the largest length of
+ the inner-most array will be used, then the behavior equals to `trunc_or_pad` with `nothing`.
+
+    trunc_and_pad(maxn, pad)
+
+Create a function that truncate input to be length <= `maxn`, and add `pad` until all input has equal length.
+
+see also: [trunc_or_pad](@ref)
+
+# Example
+
+```julia
+julia> TextEncodeBase.trunc_and_pad(1:5, 7, -1)
+5-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> TextEncodeBase.trunc_and_pad([1:5, 2:7], 10, -1)
+2-element Vector{Vector{Int64}}:
+ [1, 2, 3, 4, 5, -1]
+ [2, 3, 4, 5, 6, 7]
+
+julia> TextEncodeBase.trunc_and_pad([1:5, [2:7, [1:2]]], nothing, -1)
+2-element Vector{Vector}:
+ [1, 2, 3, 4, 5, -1]
+ Vector[[2, 3, 4, 5, 6, 7], [[1, 2, -1, -1, -1, -1]]]
+
+```
+"""
+trunc_and_pad(x, maxn, pad) = (n = nestedmaxlength(x); _trunc_and_pad(x, n, isnothing(maxn) ? n : maxn, pad))
+
+trunc_and_pad(maxn, pad) = FixRest(trunc_and_pad, maxn, pad)
+trunc_and_pad(x; maxn=nothing, pad) = trunc_and_pad(x, maxn, pad)
+trunc_and_pad(; maxn=nothing, pad) = trunc_and_pad(maxn, pad)
+
+_trunc_and_pad(x, n, maxn, pad) = trunc_or_pad(x, min(n, maxn), pad)
+
 nestedmaxlength(x::AbstractArray{<:AbstractArray}) = mapfoldl(nestedmaxlength, max, x)
 nestedmaxlength(x::AbstractArray) = length(x)
+function nestedmaxlength(x::AbstractArray{>:AbstractArray})
+    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
+    if aoa
+        mapfoldl(nestedmaxlength, max, x)
+    elseif aov
+        length(x)
+    else
+        error("Input array is mixing array and non-array elements")
+    end
+end
 
 _checkeqsize(x, y) = x == y ? x : throw(DimensionMismatch("nested size not the same: $x != $y"))
 
 nestedsize(x::AbstractArray{<:AbstractArray}) = (mapfoldl(nestedsize, _checkeqsize, x)..., size(x)...)
 nestedsize(x::AbstractArray) = size(x)
+function nestedsize(x::AbstractArray{>:AbstractArray})
+    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
+    if aoa
+        (mapfoldl(nestedsize, _checkeqsize, x)..., size(x)...)
+    elseif aov
+        size(x)
+    else
+        error("Input array is mixing array and non-array elements")
+    end
+end
 
 nestedtype(x::AbstractArray{<:AbstractArray}) = mapreduce(nestedtype, promote_type, x)
 nestedtype(x::AbstractArray) = mapreduce(typeof, promote_type, x)
+function nestedtype(x::AbstractArray{>:AbstractArray})
+    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
+    if aoa
+        mapreduce(nestedtype, promote_type, x)
+    elseif aov
+        mapreduce(typeof, promote_type, x)
+    else
+        error("Input array is mixing array and non-array elements")
+    end
+end
+
 
 """
     nested2batch(x)
@@ -273,3 +387,14 @@ end
 _reduce_nested(dst_offset, xi) = dst_offset[1], _nested2batch!(dst_offset..., xi)[2]
 _nested2batch!(arr, offset, x::AbstractArray{<:AbstractArray}) = foldl(_reduce_nested, x; init=(arr, offset))
 _nested2batch!(arr, offset, x::AbstractArray) = (copyto!(arr, offset, x, 1, length(x)); (arr, offset+length(x)))
+function _nested2batch!(arr, offset, x::AbstractArray{>:AbstractArray})
+    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
+    if aoa
+        foldl(_reduce_nested, x; init=(arr, offset))
+    elseif aov
+        copyto!(arr, offset, x, 1, length(x))
+        (arr, offset+length(x))
+    else
+        error("Input array is mixing array and non-array elements")
+    end
+end
