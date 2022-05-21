@@ -333,6 +333,8 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
         @testset "onehot" begin
             @test lookup(OneHot, vocab, "a") == OneHot(3, 1)
             @test lookup(OneHot, vocab, "A") == OneHot(3, 0)
+            @test lookup(OneHot, vocab, ("a", "A")) == (OneHot(3, 1), OneHot(3, 0))
+            @test lookup(OneHot, vocab, (x="a", y="A")) == (x=OneHot(3, 1), y=OneHot(3, 0))
             @test lookup(OneHot, vocab, "a", "b", "c", "d") == OneHotArray(3, [1,2,3,0])
             @test lookup(OneHot, vocab, ["a", "b", "c", "d"]) == OneHotArray(3, [1,2,3,0])
             @test lookup(OneHot, vocab, ["a" "b"; "c" "d"]) == OneHotArray(3, [1 2; 3 0])

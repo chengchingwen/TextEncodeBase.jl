@@ -72,6 +72,7 @@ lookup(::Type{I}, v::Vocab{<:Integer}, s::Integer) where I<:Integer = I(_lookup_
 # lookup(::Type{OneHot}, v::Vocab) = lookup $ OneHot $ v
 lookup(::Type{OneHot}, v::Vocab, i) = lookup_onehot(v, i)
 lookup(T::Type{OneHot}, v::Vocab, is::AbstractArray) = OneHotArray{length(v)}(lookup_onehot(v, is))
+lookup(::Type{OneHot}, v::Vocab, is::Union{Tuple, NamedTuple}) = map(lookup(OneHot, v), is)
 
 lookup_onehot(v::Vocab, i) = OneHot(length(v))(lookup(UInt32, v, i))
 lookup_onehot(v::Vocab, is::AbstractArray) = map(lookup_onehot $ v, is)
