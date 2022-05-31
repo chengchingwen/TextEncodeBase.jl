@@ -86,6 +86,8 @@ julia> lookup(vocab, oha)
 
 ## Pipelines
 
+*Reexport from [FuncPipelines.jl](https://github.com/chengchingwen/FuncPipelines.jl)*
+
 The Pipeline api help you define a series of functions that can easily be decomposed and then combined with
  other function to form a new pipeline. A function (`Pipeline`) is tagged with one (or multiple) `Symbol`s.
  The return values of that `Pipeline` will be bound to those symbols storing in a `NamedTuple`. Precisely,
