@@ -182,7 +182,7 @@ Truncate `x` to length `n`, or add `pad` at the end of x until length equal `n`.
 
 Create a function that will return new array with truncated or padded value of the input.
 
-see also: [trunc_and_pad](@ref)
+see also: [`trunc_and_pad`](@ref)
 
 # Example
 
@@ -248,7 +248,7 @@ Truncate `x` if length exceed `maxn`, and add `pad` at the end of x until all le
 
 Create a function that truncate input to be length <= `maxn`, and add `pad` until all input has equal length.
 
-see also: [trunc_or_pad](@ref)
+see also: [`trunc_or_pad`](@ref)
 
 # Example
 
