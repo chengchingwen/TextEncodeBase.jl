@@ -250,12 +250,12 @@ abstract type WrappedTokenization{T<:AbstractTokenization} <: AbstractTokenizati
 
 base(t::WrappedTokenization) = t.base
 
-splittability(p::Union{Nothing, TokenStages}, t::WrappedTokenization, x::TokenStages) = splittability(p, base(t), x)
-splitting(p::Union{Nothing, TokenStages}, t::WrappedTokenization, x::TokenStages)    = splitting(p, base(t), x)
-splitting(p::Union{Nothing, TokenStages}, t::WrappedTokenization, s::TokenStages, x) = splitting(p, base(t), s, x)
+splittability(p::ParentStages, t::WrappedTokenization, x::TokenStages) = splittability(p, base(t), x)
+splitting(p::ParentStages, t::WrappedTokenization, x::TokenStages)    = splitting(p, base(t), x)
+splitting(p::ParentStages, t::WrappedTokenization, s::TokenStages, x) = splitting(p, base(t), s, x)
 
-wrap(p::Union{Nothing, TokenStages}, t::WrappedTokenization, s::TokenStages, x) = wrap(p, base(t), s, x)
-wrap(p::Union{Nothing, TokenStages}, t::WrappedTokenization, s::TokenStages)    = wrap(p, base(t), s)
+wrap(p::ParentStages, t::WrappedTokenization, s::TokenStages, x) = wrap(p, base(t), s, x)
+wrap(p::ParentStages, t::WrappedTokenization, s::TokenStages)    = wrap(p, base(t), s)
 
 
 # tokenizer api
