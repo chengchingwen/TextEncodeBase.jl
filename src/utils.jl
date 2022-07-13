@@ -148,19 +148,6 @@ function matchsplits!(found, regs, s)
     return found
 end
 
-function _MatchSplits(patterns, x)
-    m, ms = first(patterns), @view patterns[2:end]
-    sp = MatchSplitIterator(m, x)
-
-    for m in ms
-        iters = Iterators.map(sp) do (istoken, s)
-            istoken ? ((istoken, s) for _ = 1:1) : MatchSplitIterator(m, s)
-        end
-        sp = Iterators.Flatten(iters)
-    end
-    return sp
-end
-
 struct MatchSplits
     regexes::Vector{Regex}
     n::Int
