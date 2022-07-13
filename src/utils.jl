@@ -1,41 +1,58 @@
 using FuncPipelines: FixRest
 
+using Base.PCRE
+
 # match utils
 
-struct MatchSplitIterator
-    t::Regex
-    s::Union{String, SubString}
+literal_match_regex(s::Union{AbstractString, AbstractChar}, flags...) = Regex(Base.wrap_string(s, UInt32(0)), flags...)
+
+as_match(r::Regex) = r
+as_match(s::Union{AbstractString, AbstractChar}) = literal_match_regex(s)
+
+mutable struct MatchSplitIterator
+    regex::Regex
+    opts::UInt32
+    str::SubString{String}
+    lastidx::Int
+    conti::Bool
+    data::Ptr{Nothing}
+    ismatch::Bool
+    i::Int
+    ri::Int
+    function MatchSplitIterator(regex::Regex, str::SubString)
+        Base.compile(regex)
+        data = PCRE.create_match_data(regex.regex)
+        itr = new(regex, regex.match_options, str, lastindex(str), true, data, true, firstindex(str), 0)
+        finalizer(itr) do itr
+            itr.data == C_NULL || PCRE.free_match_data(itr.data)
+        end
+        return itr
+    end
 end
-Base.eltype(::Type{MatchSplitIterator}) = Tuple{Bool, SubString}
+MatchSplitIterator(regex::Regex, str::String) = MatchSplitIterator(regex, SubString(str))
+MatchSplitIterator(regex, str) = MatchSplitIterator(literal_match_regex(regex), str)
+
+Base.eltype(::Type{MatchSplitIterator}) = Tuple{Bool, SubString{String}}
 Base.IteratorSize(::Type{MatchSplitIterator}) = Base.SizeUnknown()
 
-function Base.iterate(itr::MatchSplitIterator, (r, i, e) = (nothing, firstindex(itr.s), lastindex(itr.s)))
-    i > e && return nothing
-    t, s = itr.t, itr.s
-    if !isnothing(r)
-        ri, re = first(r), last(r)
-        j = isempty(r) ? first(r) : last(r)
-        v = (true, SubString(s, ri, re))
-        return v, j > e ? (nothing, i, -1) : (nothing, @inbounds(nextind(s, j)), e)
-    end
-
-    r = findnext(itr.t, itr.s, i)
-    if isnothing(r)
-        return (false, SubString(s, i, e)), (nothing, i, -1)
-    end
-
-    ri, re = first(r), last(r)
-    if i != ri
-        return (false, SubString(s, i, @inbounds(prevind(s, ri)))), (r, i, e)
+Base.iterate(itr::MatchSplitIterator) = Base.iterate(itr, nothing)
+function Base.iterate(itr::MatchSplitIterator, _)
+    itr.conti || return nothing
+    e = itr.lastidx
+    v, nstate = _matchsplit(itr.regex, itr.str, itr.i, e, itr.opts, itr.data, itr.ismatch, itr.ri)
+    i = nstate[1]
+    itr.i = i
+    if i > e
+        itr.conti = false
+        return v, nothing
     else
-        j = isempty(r) ? first(r) : last(r)
-        v = (true, SubString(s, ri, re))
-        return v, j > e ? (nothing, i, -1) : (nothing, @inbounds(nextind(s, j)), e)
+        itr.ismatch = v[1]
+        itr.ri = nstate[2]
+        return v, nothing
     end
-    nothing
 end
 
-matchsplit(t, s) = matchsplit!(Tuple{Bool, SubString}[], t, s)
+matchsplit(t, s) = matchsplit!(Tuple{Bool, SubString{String}}[], t, s)
 function matchsplit!(found, t, s)
     i, e = firstindex(s), lastindex(s)
 
@@ -58,7 +75,80 @@ function matchsplit!(found, t, s)
     return found
 end
 
-function MatchSplits(patterns, x)
+@inline function _matchsplit(reg::Regex, s, i, e, opts, data, ismatch, ri)
+    if ri == 0
+        matched = PCRE.exec(reg.regex, s, i - 1, opts, data)
+        if matched
+            p = PCRE.ovec_ptr(data)
+            ri = Int(unsafe_load(p,1))+1
+        else
+            return (false, @inbounds(SubString(s, i, e))), (e+1, 0)
+        end
+    end
+
+    if ismatch && i != ri
+        return (false, @inbounds(SubString(s, i, prevind(s, ri)))), (i, ri)
+    end
+
+    p = PCRE.ovec_ptr(data)
+    re = @inbounds prevind(s, Int(unsafe_load(p,2))+1)
+    i = @inbounds nextind(s, re)
+    return (true, @inbounds(SubString(s, ri, re))), (i, 0)
+end
+
+function matchsplit!(found, reg::Regex, s)
+    i, e = firstindex(s), lastindex(s)
+    Base.compile(reg)
+    data = PCRE.create_match_data(reg.regex)
+    opts = reg.match_options
+
+    ismatch = true
+    ri = 0
+    while true
+        v, state = _matchsplit(reg, s, i, e, opts, data, ismatch, ri)
+        push!(found, v)
+        i = state[1]
+        i > e && break
+        ismatch = v[1]
+        ri = state[2]
+        # matched = PCRE.exec(reg.regex, s, i - 1, opts, data)
+        # if matched
+        #     p = PCRE.ovec_ptr(data)
+        #     ri = Int(unsafe_load(p,1))+1
+        #     re = @inbounds prevind(s, Int(unsafe_load(p,2))+1)
+        # else
+        #     push!(found, (false, SubString(s, i, e)))
+        #     break
+        # end
+        # i != ri && push!(found, (false, @inbounds SubString(s, i, prevind(s, ri))))
+        # push!(found, (true, SubString(s, ri, re)))
+        # @inbounds i = nextind(s, re)
+        # i > e && break
+    end
+    PCRE.free_match_data(data)
+    return found
+end
+
+matchsplits(t, s) = matchsplits!(Tuple{Bool, SubString{String}}[], t, s)
+function matchsplits!(found, regs, s)
+    if isempty(regs)
+        push!(found, (false, s))
+        return found
+    end
+    reg = as_match(first(regs))
+    rest = @view regs[2:end]
+    for v in MatchSplitIterator(reg, s)
+        ismatch = v[1]
+        if ismatch
+            push!(found, v)
+        else
+            matchsplits!(found, rest, v[2])
+        end
+    end
+    return found
+end
+
+function _MatchSplits(patterns, x)
     m, ms = first(patterns), @view patterns[2:end]
     sp = MatchSplitIterator(m, x)
 
@@ -71,7 +161,53 @@ function MatchSplits(patterns, x)
     return sp
 end
 
-@noinline matchsplits(patterns, x) = collect(Tuple{Bool, SubString}, MatchSplits(patterns, x))
+struct MatchSplits
+    regexes::Vector{Regex}
+    n::Int
+    str::SubString{String}
+    function MatchSplits(regexes::Vector{Regex}, str::SubString{String})
+        n = length(regexes)
+        @assert n != 0
+        return new(regexes, n, str)
+    end
+end
+MatchSplits(regexes::Vector{Regex}, str::String) = MatchSplits(regexes, SubString(str))
+MatchSplits(regexes, str) = MatchSplits(map(as_match, regexes), str)
+
+Base.eltype(::Type{MatchSplits}) = Tuple{Bool, SubString{String}}
+Base.IteratorSize(::Type{MatchSplits}) = Base.SizeUnknown()
+
+function Base.iterate(itr::MatchSplits)
+    itr1 = MatchSplitIterator(itr.regexes[1], itr.str)
+    n = itr.n
+    state = [itr1]
+    return Base.iterate(itr, state)
+end
+
+function Base.iterate(itr::MatchSplits, state)
+    level = length(state)
+    iszero(level) && return nothing
+    itr_i = @inbounds state[level]
+    I = Base.iterate(itr_i)
+    if isnothing(I)
+        pop!(state)
+        return Base.iterate(itr, state)
+    end
+    v, _ = I
+    ismatch = v[1]
+    if ismatch
+        return v, state
+    else
+        if level == itr.n
+            return v, state
+        else
+            regex_j = @inbounds itr.regexes[level+1]
+            itr_j = MatchSplitIterator(regex_j, v[2])
+            push!(state, itr_j)
+            return Base.iterate(itr, state)
+        end
+    end
+end
 
 # misc
 
