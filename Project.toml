@@ -11,7 +11,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 WordTokenizers = "796a5d58-b03d-544a-977e-18100b691f6e"
 
 [compat]
-FuncPipelines = "0.1"
+FuncPipelines = "0.1, 0.2"
 PartialFunctions = "1.1"
 PrimitiveOneHot = "0.1.2"
 StaticArrays = "1.3"
