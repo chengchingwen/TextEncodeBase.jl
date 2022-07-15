@@ -16,3 +16,10 @@ MatchTokenization(base, patterns) = MatchTokenization(base, map(as_match, patter
 splittability(::Nothing, ::MatchTokenization, ::WordStage) = Splittable()
 @inline splitting(::Nothing, t::MatchTokenization, w::WordStage) = MatchSplits(t.patterns, getvalue(w))
 @inline wrap(::Nothing, t::MatchTokenization, w::WordStage, (istoken, x)) = istoken ? Token(x, getmeta(w)) : Word(x, getmeta(w))
+
+# show
+function Base.show(io::IO, t::MatchTokenization)
+    print(io, "MatchTokenization(")
+    show(io, t.base)
+    print(io, ", ", length(t.patterns), " patterns)")
+end
