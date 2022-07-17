@@ -13,9 +13,10 @@ end
 
 using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     BaseTokenization, NestedTokenizer, FlatTokenizer,
-    WordTokenization, IndexedTokenization, MatchTokenization,
+    WordTokenization, IndexedTokenization, MatchTokenization, UnicodeNormalizer,
     TokenStages, Document, Sentence, Word, Token, Batch
-using TextEncodeBase: getvalue, getmeta, with_head_tail, trunc_and_pad, trunc_or_pad, nested2batch, nestedcall
+using TextEncodeBase: getvalue, getmeta, updatevalue,
+    with_head_tail, trunc_and_pad, trunc_or_pad, nested2batch, nestedcall
 
 using WordTokenizers
 
@@ -87,6 +88,30 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test map(getvalue, tkr(document)) == [
                 "This", "is", "the", "first", "s",
                 "en", "t", "en", "ce", ".", "And",
+                "the", "second", "one", "with", "some",
+                "number", "1", "2", "3", "4", "5", ".",
+            ]
+            @test map(getvalue, tkr(sentence)) == [
+                "A", "single", "s", "en", "t", "en",
+                "ce", "with", "3", "1", "char", ".",
+            ]
+            @test map(getvalue, tkr(word)) == [word.x]
+            @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
+        end
+
+        @testset "normalizer" begin
+            tkr = FlatTokenizer(UnicodeNormalizer(; casefold = true))
+            @test tkr(updatevalue(uppercase, document)) ==
+                map(Token, mapfoldl(nltk_word_tokenize, append!, lowercase.(split_sentences(document.x))))
+            @test tkr(updatevalue(uppercase, sentence)) == map(Token, nltk_word_tokenize(lowercase(sentence.x)))
+            @test tkr(updatevalue(uppercase, word)) == [Token(lowercase(word.x))]
+        end
+
+        @testset "match normalized tokenizer" begin
+            tkr = FlatTokenizer(MatchTokenization(UnicodeNormalizer(; casefold = true), ["This", "A", "en", r"\d"]))
+            @test map(getvalue, tkr(document)) == [
+                "This", "is", "the", "first", "s",
+                "en", "t", "en", "ce", ".", "A", "nd",
                 "the", "second", "one", "with", "some",
                 "number", "1", "2", "3", "4", "5", ".",
             ]
