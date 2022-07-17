@@ -16,6 +16,7 @@ include("./match.jl")
 include("./tkrs.jl")
 include("./batch.jl")
 include("./macro.jl")
+include("./normalize.jl")
 
 # vocab
 export AbstractVocabulary, Vocab, lookup, OneHot, OneHotArray
