@@ -107,20 +107,23 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
                 "number", "1", "2", "3", "4", "5", ".",
             ]
             @test map(getmeta, tkr(document)) == begin
+                m = [false, false, false, false, false, true, false, true, false, false, false,
+                     false, false, false, false, false, false, true, true, true, true, true, false]
                 s = Iterators.flatten((Iterators.repeated(1, 10), Iterators.repeated(2, 13)))
                 w = Iterators.flatten((1:10, 1:13))
-                map(NamedTuple{(:sentence_id, :word_id, :token_id)}, zip(s, w, w))
+                map(NamedTuple{(:sentence_id, :ismatch, :word_id, :token_id)}, zip(s, m, w, w))
             end
 
             @test map(getvalue, tkr(sentence)) == [
                 "A", "single", "s", "en", "t", "en",
                 "ce", "with", "3", "1", "char", ".",
             ]
-            @test map(getmeta, tkr(sentence)) == map(NamedTuple{(:word_id, :token_id)}, zip(1:12, 1:12))
+            sentence_match = [false, false, false, true, false, true, false, false, true, true, false, false]
+            @test map(getmeta, tkr(sentence)) == map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip(sentence_match, 1:12, 1:12))
             @test map(getvalue, tkr(word)) == [word.x]
-            @test map(getmeta, tkr(word)) == [(word_id = 1, token_id = 1)]
+            @test map(getmeta, tkr(word)) == [(ismatch = false, word_id = 1, token_id = 1)]
             @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
-            @test map(getmeta, tkr(Word("123"))) == map(NamedTuple{(:word_id, :token_id)}, zip(1:3, 1:3))
+            @test map(getmeta, tkr(Word("123"))) == map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip([true, true, true], 1:3, 1:3))
         end
 
         @testset "nested output" begin
@@ -198,6 +201,10 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
                 ]
             ]
             @test nestedcall(getmeta, tkr(document)) == begin
+                ismatch = [
+                    [r(false, 15); true; false; true; r(false, 3);],
+                    [r(false, 29); r(true, 5); false;],
+                ]
                 sentence_id = [r(1, 21), r(2, 35)]
                 word_id = [[
                         r(1, 4); r(2, 2); r(3, 3); r(4, 5);
@@ -207,7 +214,7 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
                         r(6, 4); r(7, 6); 8; 9; 10; 11; 12; 13;
                     ]]
                 token_id = [[1:21;], [1:35;]]
-                map((s,w,t)->map(NamedTuple{(:sentence_id, :word_id, :token_id)}, zip(s,w,t)), sentence_id, word_id, token_id)
+                map((s,m,w,t)->map(NamedTuple{(:sentence_id, :ismatch, :word_id, :token_id)}, zip(s,m,w,t)), sentence_id, ismatch, word_id, token_id)
             end
             @test nestedcall(getvalue, tkr(sentence)) == [
                 [
@@ -216,15 +223,16 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
                 ]
             ]
             @test nestedcall(getmeta, tkr(sentence)) == begin
+                ismatch = [r(false, 8); true; false; true; r(false, 6); r(true, 2); r(false, 5);]
                 word_id = [
                     1; r(2, 6); 3; 4; 5; 6;
                     r(7, 2); r(8, 4); 9; 10; r(11, 4); 12;
                 ]
                 token_id = [1:24;]
-                [map(NamedTuple{(:word_id, :token_id)}, zip(word_id, token_id))]
+                [map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip(ismatch, word_id, token_id))]
             end
             @test nestedcall(getvalue, tkr(word)) == ["w", "o", "r", "d"]
-            @test nestedcall(getmeta, tkr(word)) == map(NamedTuple{(:word_id, :token_id)}, zip(r(1, 4), 1:4))
+            @test nestedcall(getmeta, tkr(word)) == map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip(r(false, 4), r(1, 4), 1:4))
         end
 
         @testset "@stage" begin
@@ -269,11 +277,11 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test sprint(show, FlatTokenizer()) == "FlatTokenizer(default)"
             @test sprint(show, FlatTokenizer(WordTokenization(tokenize=poormans_tokenize))) == "FlatTokenizer(WordTokenization(split_sentences = WordTokenizers.split_sentences, tokenize = WordTokenizers.poormans_tokenize))"
             @test sprint(show, FlatTokenizer(IndexedTokenization())) == "FlatTokenizer(IndexedTokenization(default))"
-            @test sprint(show, FlatTokenizer(MatchTokenization([r"\d", r"en"]))) == "FlatTokenizer(MatchTokenization(default, patterns = Regex[r\"\\d\", r\"en\"]))"
-            @test sprint(show, FlatTokenizer(IndexedTokenization(MatchTokenization([r"\d", r"en"])))) == "FlatTokenizer(IndexedTokenization(MatchTokenization(default, patterns = Regex[r\"\\d\", r\"en\"])))"
+            @test sprint(show, FlatTokenizer(MatchTokenization([r"\d", r"en"]))) == "FlatTokenizer(MatchTokenization(default, 2 patterns))"
+            @test sprint(show, FlatTokenizer(IndexedTokenization(MatchTokenization([r"\d", r"en"])))) == "FlatTokenizer(IndexedTokenization(MatchTokenization(default, 2 patterns)))"
             @test sprint(show, NestedTokenizer(IndexedTokenization())) == "NestedTokenizer(IndexedTokenization(default))"
             @test sprint(show, FlatTokenizer(IndexedTokenization(CharTk()))) == "FlatTokenizer(IndexedTokenization(CharTk))"
-            @test sprint(show, NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk(), [r"\d", r"en"])))) == "NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk, patterns = Regex[r\"\\d\", r\"en\"])))"
+            @test sprint(show, NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk(), [r"\d", r"en"])))) == "NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk, 2 patterns)))"
         end
     end
 
