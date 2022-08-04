@@ -32,3 +32,30 @@ normalizer(t::LowercaseNormalizer) = lowercase
 ### Unicode
 
 include("./unicode.jl")
+
+struct UnicodeNormalizer{T} <: SentenceNormalizer{T}
+    base::T
+    flags::Int
+    UnicodeNormalizer(base::AbstractTokenization, normalform::Symbol) = new{typeof(base)}(base, _utf8proc_flags(normalform))
+    UnicodeNormalizer(base::AbstractTokenization; kw...) = new{typeof(base)}(base, _utf8proc_flags(; kw...))
+end
+UnicodeNormalizer(normalform::Symbol) = UnicodeNormalizer(DefaultTokenization(), normalform)
+UnicodeNormalizer(; kw...) = UnicodeNormalizer(DefaultTokenization(); kw...)
+
+normalizer(t::UnicodeNormalizer) = Base.Fix2(utf8proc_map, t.flags)
+
+function Base.show(io::IO, t::UnicodeNormalizer)
+    nfs = (:NFC, :NFD, :NFKC, :NFKD)
+    idx = findfirst(==(t.flags), map(_utf8proc_flags, nfs))
+    if isnothing(idx)
+        print(io, "UnicodeNormalizer(")
+        show(io, base(t))
+        _show_utf8proc_flags(io, t.flags)
+        print(io, ')')
+    else
+        name = nfs[idx]
+        print(io, name, '(')
+        show(io, base(t))
+        print(io, ')')
+    end
+end

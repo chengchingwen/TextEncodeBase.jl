@@ -54,55 +54,31 @@ function _utf8proc_flags(;
     return flags
 end
 
-struct UnicodeNormalizer{T} <: SentenceNormalizer{T}
-    base::T
-    flags::Int
-    UnicodeNormalizer(base::AbstractTokenization, normalform::Symbol) = new{typeof(base)}(base, _utf8proc_flags(normalform))
-    UnicodeNormalizer(base::AbstractTokenization; kw...) = new{typeof(base)}(base, _utf8proc_flags(; kw...))
-end
-UnicodeNormalizer(normalform::Symbol) = UnicodeNormalizer(DefaultTokenization(), normalform)
-UnicodeNormalizer(; kw...) = UnicodeNormalizer(DefaultTokenization(); kw...)
-
-normalizer(t::UnicodeNormalizer) = Base.Fix2(utf8proc_map, t.flags)
-
-function Base.show(io::IO, t::UnicodeNormalizer)
-    nfs = (:NFC, :NFD, :NFKC, :NFKD)
-    idx = findfirst(==(t.flags), map(_utf8proc_flags, nfs))
-    if isnothing(idx)
-        print(io, "UnicodeNormalizer(")
-        show(io, base(t))
-        flags = t.flags
-        (flags & UTF8PROC_STABLE > 0) &&
-            print(io, ", stable = true")
-        (flags & UTF8PROC_COMPAT > 0) &&
-            print(io, ", compat = true")
-        (flags & UTF8PROC_DECOMPOSE > 0) &&
-            print(io, ", decompose = true")
-        (flags & UTF8PROC_COMPOSE > 0) &&
-            print(io, ", compose = true")
-        (flags & UTF8PROC_IGNORE > 0) &&
-            print(io, ", stripignore = true")
-        (flags & UTF8PROC_REJECTNA > 0) &&
-            print(io, ", rejectna = true")
-        (flags & UTF8PROC_NLF2LS > 0) &&
-            print(io, ", newline2ls = true")
-        (flags & UTF8PROC_NLF2PS > 0) &&
-            print(io, ", newline2ps = true")
-        (flags & UTF8PROC_NLF2LF > 0) &&
-            print(io, ", newline2lf = true")
-        (flags & UTF8PROC_STRIPCC > 0) &&
-            print(io, ", stripcc = true")
-        (flags & UTF8PROC_CASEFOLD > 0) &&
-            print(io, ", casefold = true")
-        (flags & UTF8PROC_LUMP > 0) &&
-            print(io, ", lump = true")
-        (flags & UTF8PROC_STRIPMARK > 0) &&
-            print(io, ", stripmark = true")
-        print(io, ')')
-    else
-        name = nfs[idx]
-        print(io, name, '(')
-        show(io, base(t))
-        print(io, ')')
-    end
+function _show_utf8proc_flags(io::IO, flags)
+    (flags & UTF8PROC_STABLE > 0) &&
+        print(io, ", stable = true")
+    (flags & UTF8PROC_COMPAT > 0) &&
+        print(io, ", compat = true")
+    (flags & UTF8PROC_DECOMPOSE > 0) &&
+        print(io, ", decompose = true")
+    (flags & UTF8PROC_COMPOSE > 0) &&
+        print(io, ", compose = true")
+    (flags & UTF8PROC_IGNORE > 0) &&
+        print(io, ", stripignore = true")
+    (flags & UTF8PROC_REJECTNA > 0) &&
+        print(io, ", rejectna = true")
+    (flags & UTF8PROC_NLF2LS > 0) &&
+        print(io, ", newline2ls = true")
+    (flags & UTF8PROC_NLF2PS > 0) &&
+        print(io, ", newline2ps = true")
+    (flags & UTF8PROC_NLF2LF > 0) &&
+        print(io, ", newline2lf = true")
+    (flags & UTF8PROC_STRIPCC > 0) &&
+        print(io, ", stripcc = true")
+    (flags & UTF8PROC_CASEFOLD > 0) &&
+        print(io, ", casefold = true")
+    (flags & UTF8PROC_LUMP > 0) &&
+        print(io, ", lump = true")
+    (flags & UTF8PROC_STRIPMARK > 0) &&
+        print(io, ", stripmark = true")
 end
