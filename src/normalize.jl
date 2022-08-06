@@ -59,3 +59,15 @@ function Base.show(io::IO, t::UnicodeNormalizer)
         print(io, ')')
     end
 end
+
+### Codemap
+
+include("./codemap.jl")
+
+struct CodeNormalizer{T, C <: CodeMap} <: WordNormalizer{T}
+    base::T
+    codemap::C
+end
+CodeNormalizer(codemap::CodeMap) = CodeNormalizer(DefaultTokenization(), codemap)
+
+TextEncodeBase.normalizer(t::CodeNormalizer) = t.codemap
