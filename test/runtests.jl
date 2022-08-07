@@ -346,6 +346,21 @@ end
             @test sprint(show, FlatTokenizer(IndexedTokenization(CharTk()))) == "FlatTokenizer(IndexedTokenization(CharTk))"
             @test sprint(show, NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk(), [r"\d", r"en"])))) == "NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk, 2 patterns)))"
         end
+
+        @testset "replace" begin
+            @test replace(
+                x->x === poormans_tokenize ? nltk_word_tokenize : x,
+                FlatTokenizer(WordTokenization(tokenize=poormans_tokenize))
+            ) == FlatTokenizer(WordTokenization(tokenize=nltk_word_tokenize))
+            @test replace(
+                x->x isa IndexedTokenization ? x.base : x,
+                IndexedTokenization(MatchTokenization([r"\d", r"en"]))
+            ) == MatchTokenization([r"\d", r"en"])
+            @test replace(
+                x->x isa UnicodeNormalizer ? UnicodeNormalizer(x.base, :NFC) : x,
+                FlatTokenizer(UnicodeNormalizer(; casefold = true))
+            ) == FlatTokenizer(UnicodeNormalizer(:NFC))
+        end
     end
 
     @testset "Vocabulary" begin
