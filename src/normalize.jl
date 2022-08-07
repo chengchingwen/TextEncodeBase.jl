@@ -36,9 +36,9 @@ include("./unicode.jl")
 struct UnicodeNormalizer{T<:AbstractTokenization} <: SentenceNormalizer{T}
     base::T
     flags::Int
-    UnicodeNormalizer(base::AbstractTokenization, normalform::Symbol) = new{typeof(base)}(base, _utf8proc_flags(normalform))
-    UnicodeNormalizer(base::AbstractTokenization; kw...) = new{typeof(base)}(base, _utf8proc_flags(; kw...))
 end
+UnicodeNormalizer(base::AbstractTokenization, normalform::Symbol) = UnicodeNormalizer(base, _utf8proc_flags(normalform))
+UnicodeNormalizer(base::AbstractTokenization; kw...) = UnicodeNormalizer(base, _utf8proc_flags(; kw...))
 UnicodeNormalizer(normalform::Symbol) = UnicodeNormalizer(DefaultTokenization(), normalform)
 UnicodeNormalizer(; kw...) = UnicodeNormalizer(DefaultTokenization(); kw...)
 
