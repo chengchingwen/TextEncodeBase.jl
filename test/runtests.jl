@@ -13,7 +13,8 @@ end
 
 using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     BaseTokenization, NestedTokenizer, FlatTokenizer,
-    WordTokenization, IndexedTokenization, MatchTokenization, UnicodeNormalizer,
+    WordTokenization, IndexedTokenization, MatchTokenization,
+    UnicodeNormalizer, CodeNormalizer, CodeUnMap,
     TokenStages, Document, Sentence, Word, Token, Batch
 using TextEncodeBase: getvalue, getmeta, updatevalue,
     with_head_tail, trunc_and_pad, trunc_or_pad, nested2batch, nestedcall
@@ -27,6 +28,11 @@ const BT = BaseTokenization
 struct CharTk <: BT end
 TextEncodeBase.splitting(::CharTk, x::Word) = split(x.x, "")
 TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
+
+function gpt2_tokenizer(text)
+    pattern = r"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
+    return map(x->x.match, eachmatch(pattern, text))
+end
 
 @testset "TextEncodeBase.jl" begin
     @testset "Tokenize" begin
@@ -99,7 +105,7 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
         end
 
-        @testset "normalizer" begin
+        @testset "unicode normalizer" begin
             tkr = FlatTokenizer(UnicodeNormalizer(; casefold = true))
             @test tkr(updatevalue(uppercase, document)) ==
                 map(Token, mapfoldl(nltk_word_tokenize, append!, lowercase.(split_sentences(document.x))))
@@ -107,7 +113,24 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test tkr(updatevalue(uppercase, word)) == [Token(lowercase(word.x))]
         end
 
-        @testset "match normalized tokenizer" begin
+        @testset "code normalizer" begin
+            tkr = FlatTokenizer(CodeNormalizer('a':'z'=>'A':'Z', 'A':'Z'=>'a':'z'))
+            @test tkr(updatevalue(uppercase, document)) ==
+                map(Token, mapfoldl(nltk_word_tokenize, append!, lowercase.(split_sentences(document.x))))
+            @test tkr(updatevalue(uppercase, sentence)) == map(Token, nltk_word_tokenize(lowercase(sentence.x)))
+            @test tkr(updatevalue(uppercase, word)) == [Token(lowercase(word.x))]
+            @test tkr(updatevalue(lowercase, sentence)) == map(Token, nltk_word_tokenize(uppercase(sentence.x)))
+            @test tkr(updatevalue(lowercase, word)) == [Token(uppercase(word.x))]
+            tkr2 = FlatTokenizer(CodeNormalizer(
+                WordTokenization(tokenize=gpt2_tokenizer),
+                [(0:32, 256:288), (127:160, 289:322), 173=>323]
+            ))
+            @test map(getvalue, tkr2(Document("This is a 😺"))) == ["This", "Ġis", "Ġa", "ĠðŁĺº"]
+            unmap = CodeUnMap(tkr2.tokenization.codemap)
+            @test map(unmap, ["This", "Ġis", "Ġa", "ĠðŁĺº"]) == ["This", " is", " a", " 😺"]
+        end
+
+        @testset "match unicode normalized tokenizer" begin
             tkr = FlatTokenizer(MatchTokenization(UnicodeNormalizer(; casefold = true), ["This", "A", "en", r"\d"]))
             @test map(getvalue, tkr(document)) == [
                 "This", "is", "the", "first", "s",
@@ -120,6 +143,22 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
                 "ce", "with", "3", "1", "char", ".",
             ]
             @test map(getvalue, tkr(word)) == [word.x]
+            @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
+        end
+
+        @testset "match code normalized tokenizer" begin
+            tkr = FlatTokenizer(MatchTokenization(CodeNormalizer('a':'z'=>'A':'Z', 'A':'Z'=>'a':'z'), ["This", "A", "en", r"\d"]))
+            @test map(getvalue, tkr(document)) == [
+                "This", "IS", "THE", "FIRST", "S",
+                "en", "T", "en", "CE", ".", "A", "ND",
+                "THE", "SECOND", "ONE", "WITH", "SOME",
+                "NUMBER", "1", "2", "3", "4", "5", ".",
+            ]
+            @test map(getvalue, tkr(sentence)) == [
+                "A", "SINGLE", "S", "en", "T", "en",
+                "CE", "WITH", "3", "1", "CHAR", ".",
+            ]
+            @test map(getvalue, tkr(word)) == ["WORD"]
             @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
         end
 
@@ -138,7 +177,6 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
                 w = Iterators.flatten((1:10, 1:13))
                 map(NamedTuple{(:sentence_id, :ismatch, :word_id, :token_id)}, zip(s, m, w, w))
             end
-
             @test map(getvalue, tkr(sentence)) == [
                 "A", "single", "s", "en", "t", "en",
                 "ce", "with", "3", "1", "char", ".",
@@ -266,7 +304,6 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test_throws Exception @macroexpand(TextEncodeBase.@stage SomeStage{A, B} <: C D)
             @test_throws Exception @macroexpand(TextEncodeBase.@stage 3)
             @test_throws Exception @macroexpand(TextEncodeBase.@stage SomeStage{A}())
-
             @test_nowarn @macroexpand(TextEncodeBase.@stage SomeStage)
             @test_nowarn @macroexpand(TextEncodeBase.@stage SomeStage{A, B} <: TokenStages)
         end
@@ -303,6 +340,7 @@ TextEncodeBase.splittability(::CharTk, x::Word) = TextEncodeBase.Splittable()
             @test sprint(show, FlatTokenizer(WordTokenization(tokenize=poormans_tokenize))) == "FlatTokenizer(WordTokenization(split_sentences = WordTokenizers.split_sentences, tokenize = WordTokenizers.poormans_tokenize))"
             @test sprint(show, FlatTokenizer(IndexedTokenization())) == "FlatTokenizer(IndexedTokenization(default))"
             @test sprint(show, FlatTokenizer(MatchTokenization([r"\d", r"en"]))) == "FlatTokenizer(MatchTokenization(default, 2 patterns))"
+            @test sprint(show, FlatTokenizer(UnicodeNormalizer(; casefold = true))) == "FlatTokenizer(UnicodeNormalizer(default, compose = true, casefold = true))"
             @test sprint(show, FlatTokenizer(IndexedTokenization(MatchTokenization([r"\d", r"en"])))) == "FlatTokenizer(IndexedTokenization(MatchTokenization(default, 2 patterns)))"
             @test sprint(show, NestedTokenizer(IndexedTokenization())) == "NestedTokenizer(IndexedTokenization(default))"
             @test sprint(show, FlatTokenizer(IndexedTokenization(CharTk()))) == "FlatTokenizer(IndexedTokenization(CharTk))"
