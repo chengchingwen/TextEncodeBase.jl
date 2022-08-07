@@ -30,11 +30,18 @@ Lookup `x` in encoder's vocabulary.
 lookup(e::AbstractTextEncoder, x) = lookup(OneHot, e.vocab, x)
 
 """
+    encode_indices(e::AbstractTextEncoder, x)
+
+Encode `x` without calling `lookup` bound with `e`.
+"""
+encode_indices(e::AbstractTextEncoder, x) = process(e, tokenize(e, x))
+
+"""
     encode(e::AbstractTextEncoder, x)
 
 Encode `x`.
 """
-encode(e::AbstractTextEncoder, x) = lookup(e, process(e, tokenize(e, x)))
+encode(e::AbstractTextEncoder, x) = lookup(e, encode_indices(e, x))
 
 """
     decode(e::AbstractTextEncoder, x)
