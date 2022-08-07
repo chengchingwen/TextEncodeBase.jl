@@ -5,6 +5,8 @@ end
 MatchTokenization(patterns) = MatchTokenization(DefaultTokenization(), patterns)
 MatchTokenization(base, patterns) = MatchTokenization(base, map(as_match, patterns))
 
+Base.:(==)(a::MatchTokenization, b::MatchTokenization) = a.base == b.base && a.patterns == b.patterns
+
 @inline splitting(p::ParentStages, t::MatchTokenization, x::SubSentence) = splitting(p, t.base, Sentence(getvalue(x), getmeta(x)))
 @inline splitting(p::ParentStages, t::MatchTokenization, s::SentenceStage) = MatchSplits(t.patterns, getvalue(s))
 

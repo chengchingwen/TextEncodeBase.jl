@@ -93,6 +93,8 @@ codeunmap(cm::CodeMap, x::Integer) = codeunmap(cm, Char(x))
 codeunmap(cm::CodeMap{F, T}, x::AbstractString) where {F, T} =
     transcode(String, map(Base.Fix1(codeunmap, cm), transcode(T, codeunits(x))))
 
+Base.:(==)(a::CodeMap, b::CodeMap) = a.from == b.from && a.to == b.to
+Base.:(==)(a::CodeUnMap, b::CodeUnMap) = a.codemap == b.codemap
 
 function Base.show(io::IO, cm::CodeMap{F,T}) where {F, T}
     print(io, "CodeMap{", F, " => ", T, '}')

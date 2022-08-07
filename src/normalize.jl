@@ -73,3 +73,5 @@ CodeNormalizer(base::AbstractTokenization, code_range, code_ranges...) = CodeNor
 CodeNormalizer(code_range, code_ranges...) = CodeNormalizer(CodeMap(code_range, code_ranges...))
 
 TextEncodeBase.normalizer(t::CodeNormalizer) = t.codemap
+
+Base.:(==)(a::CodeNormalizer, b::CodeNormalizer) = a.base == b.base && a.codemap == b.codemap
