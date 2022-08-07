@@ -16,20 +16,23 @@ function codesize(crs)
     return T
 end
 
-function code_range(f, t)
-    fr = code_range(f)
-    tr = code_range(t)
+const CodeRangeT = Union{Integer, Char, UnitRange, StepRange}
+const CodeRangeMap = Union{Tuple{CodeRangeT, CodeRangeT}, Pair{<:CodeRangeT, <:CodeRangeT}}
+
+function _code_range(f, t)
+    fr = _code_range(f)
+    tr = _code_range(t)
     @assert length(fr) == length(tr) "codemap of two range with different length: $(length(fr)) != $(length(tr))"
     return (fr, tr)
 end
-code_range(arg::NTuple{2}) = code_range(arg...)
-code_range(arg::Pair) = code_range(arg[1], arg[2])
-code_range(c::Integer) = code_range(Char(c))
-code_range(c::Char) = c:c
-code_range(r::UnitRange) = Char(r.start):Char(r.stop)
-code_range(r::StepRange) = StepRange(Char(r.start), Int(r.step), Char(r.stop))
-code_range(r::StepRange{Char}) = StepRange(r.start, Int(r.step), r.stop)
-code_range(r::StepRange{Char, Int}) = r
+_code_range(r::UnitRange) = Char(r.start):Char(r.stop)
+_code_range(r::StepRange) = StepRange(Char(r.start), Int(r.step), Char(r.stop))
+_code_range(r::StepRange{Char}) = StepRange(r.start, Int(r.step), r.stop)
+_code_range(r::StepRange{Char, Int}) = r
+_code_range(c::Integer) = _code_range(Char(c))
+_code_range(c::Char) = c:c
+
+code_range(arg::CodeRangeMap) = _code_range(arg[1], arg[2])
 
 struct CodeMap{F, T}
     from::Vector{StepRange{Char, Int}}
@@ -41,13 +44,13 @@ struct CodeMap{F, T}
         From = codesize(from)::Type{<:Union{UInt8, UInt16, UInt32}}
         To = codesize(to)::Type{<:Union{UInt8, UInt16, UInt32}}
         @assert length(from) == length(to) "different number of code ranges: $(length(from)) != $(length(to))"
-        return new{From, To}(sort(from), sort(to))
+        return new{From, To}(from, to)
     end
 end
 (cm::CodeMap)(x) = codemap(cm, x)
 
-CodeMap(args...) = CodeMap(args)
-function CodeMap(args)
+CodeMap(args::CodeRangeMap...) = CodeMap(args)
+function CodeMap(args::Union{Tuple, AbstractVector})
     len = length(args)
     from = Vector{StepRange{Char, Int}}(undef, len)
     to = Vector{StepRange{Char, Int}}(undef, len)

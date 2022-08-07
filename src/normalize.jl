@@ -12,7 +12,7 @@ wrap(::Nothing, t::SentenceNormalizer, s::TokenStages) = wrap(nothing, base(t), 
 wrap(::Nothing, t::SentenceNormalizer, s::TokenStage) = wrap(nothing, base(t), s)
 
 # perform normalization on  word level.
-wrap(p::ParentStages, t::WordNormalizer, s::WordStage) = wrap(p, base(t), updatevalue(normalizer(t), s))
+wrap(p::TokenStages, t::WordNormalizer, s::WordStage) = wrap(p, base(t), updatevalue(normalizer(t), s))
 # if word is splitable
 splitting(p::ParentStages, t::WordNormalizer, x::WordStage) = splitting(p, base(t), updatevalue(normalizer(t), x))
 
@@ -22,7 +22,7 @@ wrap(::Nothing, t::WordNormalizer, s::TokenStage) = wrap(nothing, base(t), s)
 
 ### lower case
 
-struct LowercaseNormalizer{T} <: SentenceNormalizer{T}
+struct LowercaseNormalizer{T<:AbstractTokenization} <: SentenceNormalizer{T}
     base::T
 end
 LowercaseNormalizer() = LowercaseNormalizer(DefaultTokenization())
@@ -33,7 +33,7 @@ normalizer(t::LowercaseNormalizer) = lowercase
 
 include("./unicode.jl")
 
-struct UnicodeNormalizer{T} <: SentenceNormalizer{T}
+struct UnicodeNormalizer{T<:AbstractTokenization} <: SentenceNormalizer{T}
     base::T
     flags::Int
     UnicodeNormalizer(base::AbstractTokenization, normalform::Symbol) = new{typeof(base)}(base, _utf8proc_flags(normalform))
@@ -64,10 +64,12 @@ end
 
 include("./codemap.jl")
 
-struct CodeNormalizer{T, C <: CodeMap} <: WordNormalizer{T}
+struct CodeNormalizer{T<:AbstractTokenization, C <: CodeMap} <: WordNormalizer{T}
     base::T
     codemap::C
 end
 CodeNormalizer(codemap::CodeMap) = CodeNormalizer(DefaultTokenization(), codemap)
+CodeNormalizer(base::AbstractTokenization, code_range, code_ranges...) = CodeNormalizer(base, CodeMap(code_range, code_ranges...))
+CodeNormalizer(code_range, code_ranges...) = CodeNormalizer(CodeMap(code_range, code_ranges...))
 
 TextEncodeBase.normalizer(t::CodeNormalizer) = t.codemap
