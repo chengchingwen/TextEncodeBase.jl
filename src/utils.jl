@@ -301,7 +301,13 @@ Truncate `x` to length `n`, or add `pad` at the end of x until length equal `n`.
  `x` can be either nested or single array. if `n` is `nothing`, the largest length of
  the inner-most array will be used.
 
-    trunc_or_pad(n, pad)
+    trunc_or_pad(x, n, pad, trunc_end = :tail, pad_end = :tail)
+
+`trunc_end` and `pad_end` specified whether the truncation and padding happened at the begining of the
+ sentences or the end of the sentence. The value is either `:tail` (means the end) or `:head` (means the
+ begining).
+
+    trunc_or_pad(n, pad, trunc_end = :tail, pad_end = :tail)
 
 Create a function that will return new array with truncated or padded value of the input.
 
@@ -332,30 +338,53 @@ julia> TextEncodeBase.trunc_or_pad([1:5, [2:7, [1:2]]], nothing, -1)
 
 ```
 """
-trunc_or_pad(x::AbstractArray, n::Integer, pad) = trunc_or_pad!(similar(x, n), x, n, pad)
-trunc_or_pad(x::AbstractArray{<:AbstractArray}, n::Integer, pad) = map(trunc_or_pad(n, pad), x)
-function trunc_or_pad(x::AbstractArray{>:AbstractArray}, n::Integer, pad)
+trunc_or_pad(x::AbstractArray, n::Integer, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    trunc_or_pad!(similar(x, n), x, n, pad, trunc_end, pad_end)
+trunc_or_pad(x::AbstractArray{<:AbstractArray}, n::Integer, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    map(trunc_or_pad(n, pad, trunc_end, pad_end), x)
+function trunc_or_pad(
+    x::AbstractArray{>:AbstractArray}, n::Integer, pad,
+    trunc_end::Symbol = :tail, pad_end::Symbol = :tail,
+)
     aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
     if aoa
-        map(trunc_or_pad(n, pad), x)
+        map(trunc_or_pad(n, pad, trunc_end, pad_end), x)
     elseif aov
-        trunc_or_pad!(similar(x, n), x, n, pad)
+        trunc_or_pad!(similar(x, n), x, n, pad, trunc_end, pad_end)
     else
         error("Input array is mixing array and non-array elements")
     end
 end
-trunc_or_pad(x, ::Nothing, pad) = trunc_or_pad(x, nestedmaxlength(x), pad)
+trunc_or_pad(x, ::Nothing, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    trunc_or_pad(x, nestedmaxlength(x), pad, trunc_end, pad_end)
+trunc_or_pad(n, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    FixRest(trunc_or_pad, n, pad, trunc_end, pad_end)
+trunc_or_pad(x; n = nothing, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    trunc_or_pad(x, n, pad, trunc_end, pad_end)
+trunc_or_pad(; n = nothing, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    trunc_or_pad(n, pad, trunc_end, pad_end)
 
-trunc_or_pad(n, pad) = FixRest(trunc_or_pad, n, pad)
-trunc_or_pad(x; n=nothing, pad) = trunc_or_pad(x, n, pad)
-trunc_or_pad(; n=nothing, pad) = trunc_or_pad(n, pad)
-
-function trunc_or_pad!(vec, x, n, pad)
-    if length(x) <= n
-        copyto!(vec, x)
-        vec[length(x)+1:n] .= pad
-    else
-        copyto!(vec, 1, x, 1, n)
+function trunc_or_pad!(vec, x, n, pad, trunc_end, pad_end)
+    len = length(x)
+    if len <= n # pad
+        if pad_end == :tail
+            copyto!(vec, x)
+            vec[len+1:n] .= pad
+        elseif pad_end == :head
+            pad_prefix_size = n - len
+            copyto!(vec, pad_prefix_size + 1, x, 1, len)
+            vec[1:pad_prefix_size] .= pad
+        else
+            error("`pad_end` is not :head or :tail but: $pad_end")
+        end
+    else # trunc
+        if trunc_end == :tail
+            copyto!(vec, 1, x, 1, n)
+        elseif trunc_end == :head
+            copyto!(vec, 1, x, len - n + 1, n)
+        else
+            error("`trunc_end` is not :head or :tail but: $trunc_end")
+        end
     end
     return vec
 end
@@ -367,7 +396,13 @@ Truncate `x` if length exceed `maxn`, and add `pad` at the end of x until all le
  `x` can be either nested or single array. If `maxn` is `nothing`, the largest length of
  the inner-most array will be used, then the behavior equals to `trunc_or_pad` with `nothing`.
 
-    trunc_and_pad(maxn, pad)
+    trunc_and_pad(x, maxn, pad, trunc_end = :tail, pad_end = :tail)
+
+`trunc_end` and `pad_end` specified whether the truncation and padding happened at the begining of the
+ sentences or the end of the sentence. The value is either `:tail` (means the end) or `:head` (means the
+ begining).
+
+    trunc_and_pad(maxn, pad, trunc_end = :tail, pad_end = :tail)
 
 Create a function that truncate input to be length <= `maxn`, and add `pad` until all input has equal length.
 
@@ -396,13 +431,17 @@ julia> TextEncodeBase.trunc_and_pad([1:5, [2:7, [1:2]]], nothing, -1)
 
 ```
 """
-trunc_and_pad(x, maxn, pad) = (n = nestedmaxlength(x); _trunc_and_pad(x, n, isnothing(maxn) ? n : maxn, pad))
+trunc_and_pad(x, maxn, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    (n = nestedmaxlength(x); _trunc_and_pad(x, n, isnothing(maxn) ? n : maxn, pad, trunc_end, pad_end))
 
-trunc_and_pad(maxn, pad) = FixRest(trunc_and_pad, maxn, pad)
-trunc_and_pad(x; maxn=nothing, pad) = trunc_and_pad(x, maxn, pad)
-trunc_and_pad(; maxn=nothing, pad) = trunc_and_pad(maxn, pad)
+trunc_and_pad(maxn, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    FixRest(trunc_and_pad, maxn, pad, trunc_end, pad_end)
+trunc_and_pad(x; maxn=nothing, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    trunc_and_pad(x, maxn, pad, trunc_end, pad_end)
+trunc_and_pad(; maxn=nothing, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
+    trunc_and_pad(maxn, pad, trunc_end, pad_end)
 
-_trunc_and_pad(x, n, maxn, pad) = trunc_or_pad(x, min(n, maxn), pad)
+@inline _trunc_and_pad(x, n, maxn, pad, trunc_end, pad_end) = trunc_or_pad(x, min(n, maxn), pad, trunc_end, pad_end)
 
 nestedmaxlength(x::AbstractArray{<:AbstractArray}) = mapfoldl(nestedmaxlength, max, x)
 nestedmaxlength(x::AbstractArray) = length(x)

@@ -467,39 +467,170 @@ end
         end
 
         @testset "trunc_or_pad" begin
-            x = collect(1:9)
-            @test trunc_or_pad(x, 5, 0) == collect(1:5)
-            @test trunc_or_pad(1:3, 5, 0) == [1:3; 0; 0]
-            @test trunc_or_pad(x, nothing, 0) == collect(1:9)
-            @test trunc_or_pad(1:3, nothing, 0) == collect(1:3)
+            @testset "trunc=tail pad=tail" begin
+                x = collect(1:9)
+                @test trunc_or_pad(x, 5, 0) == collect(1:5)
+                @test trunc_or_pad(1:3, 5, 0) == [1:3; 0; 0]
+                @test trunc_or_pad(x, nothing, 0) == collect(1:9)
+                @test trunc_or_pad(1:3, nothing, 0) == collect(1:3)
 
-            @test trunc_or_pad(5, 0)(x) == collect(1:5)
-            @test trunc_or_pad(5, 0)(1:3) == [1:3; 0; 0]
-            @test trunc_or_pad(nothing, 0)(x) == collect(1:9)
-            @test trunc_or_pad(nothing, 0)(1:3) == collect(1:3)
+                @test trunc_or_pad(5, 0)(x) == collect(1:5)
+                @test trunc_or_pad(5, 0)(1:3) == [1:3; 0; 0]
+                @test trunc_or_pad(nothing, 0)(x) == collect(1:9)
+                @test trunc_or_pad(nothing, 0)(1:3) == collect(1:3)
 
-            @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], 7, -1) == [[collect(1:7)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
-            @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1) == [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
-            @test trunc_or_pad(Any[Any[[0,0], 1:10], [1]], 7, -1) == [[[0; 0; fill(-1,5)], collect(1:7)], [1; fill(-1,6)]]
-            @test trunc_or_pad(Any[Any[Any[0,1,2]]], 5, 0) == [[[0,1,2,0,0]]]
+                @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], 7, -1) ==
+                    [[collect(1:7)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
+                @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1) ==
+                    [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
+                @test trunc_or_pad(Any[Any[[0,0], 1:10], [1]], 7, -1) ==
+                    [[[0; 0; fill(-1,5)], collect(1:7)], [1; fill(-1,6)]]
+                @test trunc_or_pad(Any[Any[Any[0,1,2]]], 5, 0) == [[[0,1,2,0,0]]]
+            end
+
+            @testset "trunc=tail pad=head" begin
+                x = collect(1:9)
+                @test trunc_or_pad(x, 5, 0, :tail, :head) == collect(1:5)
+                @test trunc_or_pad(1:3, 5, 0, :tail, :head) == [0; 0; 1:3]
+                @test trunc_or_pad(x, nothing, 0, :tail, :head) == collect(1:9)
+                @test trunc_or_pad(1:3, nothing, 0, :tail, :head) == collect(1:3)
+
+                @test trunc_or_pad(5, 0, :tail, :head)(x) == collect(1:5)
+                @test trunc_or_pad(5, 0, :tail, :head)(1:3) == [0; 0; 1:3]
+                @test trunc_or_pad(nothing, 0, :tail, :head)(x) == collect(1:9)
+                @test trunc_or_pad(nothing, 0, :tail, :head)(1:3) == collect(1:3)
+
+                @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], 7, -1, :tail, :head) ==
+                    [[collect(1:7)], [-1; -1; 1:5], [fill(-1, 5); 2:3]]
+                @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1, :tail, :head) ==
+                    [[collect(1:9)], [fill(-1, 4); 1:5], [fill(-1, 7); 2:3]]
+                @test trunc_or_pad(Any[Any[[0,0], 1:10], [1]], 7, -1, :tail, :head) ==
+                    [[[fill(-1,5); 0; 0], collect(1:7)], [fill(-1,6); 1]]
+                @test trunc_or_pad(Any[Any[Any[0,1,2]]], 5, 0, :tail, :head) == [[[0,0,0,1,2]]]
+            end
+            @testset "trunc=head pad=tail" begin
+                x = collect(1:9)
+                @test trunc_or_pad(x, 5, 0, :head, :tail) == collect(5:9)
+                @test trunc_or_pad(1:3, 5, 0, :head, :tail) == [1:3; 0; 0]
+                @test trunc_or_pad(x, nothing, 0, :head, :tail) == collect(1:9)
+                @test trunc_or_pad(1:3, nothing, 0, :head, :tail) == collect(1:3)
+
+                @test trunc_or_pad(5, 0, :head, :tail)(x) == collect(5:9)
+                @test trunc_or_pad(5, 0, :head, :tail)(1:3) == [1:3; 0; 0]
+                @test trunc_or_pad(nothing, 0, :head, :tail)(x) == collect(1:9)
+                @test trunc_or_pad(nothing, 0, :head, :tail)(1:3) == collect(1:3)
+
+                @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], 7, -1, :head, :tail) ==
+                    [[collect(3:9)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
+                @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1, :head, :tail) ==
+                    [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
+                @test trunc_or_pad(Any[Any[[0,0], 1:10], [1]], 7, -1, :head, :tail) ==
+                    [[[0; 0; fill(-1,5)], collect(4:10)], [1; fill(-1,6)]]
+                @test trunc_or_pad(Any[Any[Any[0,1,2]]], 5, 0, :head, :tail) == [[[0,1,2,0,0]]]
+            end
+            @testset "trunc=head pad=head" begin
+                x = collect(1:9)
+                @test trunc_or_pad(x, 5, 0, :head, :head) == collect(5:9)
+                @test trunc_or_pad(1:3, 5, 0, :head, :head) == [0; 0; 1:3]
+                @test trunc_or_pad(x, nothing, 0, :head, :head) == collect(1:9)
+                @test trunc_or_pad(1:3, nothing, 0, :head, :head) == collect(1:3)
+
+                @test trunc_or_pad(5, 0, :head, :head)(x) == collect(5:9)
+                @test trunc_or_pad(5, 0, :head, :head)(1:3) == [0; 0; 1:3]
+                @test trunc_or_pad(nothing, 0, :head, :head)(x) == collect(1:9)
+                @test trunc_or_pad(nothing, 0, :head, :head)(1:3) == collect(1:3)
+
+                @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], 7, -1, :head, :head) ==
+                    [[collect(3:9)], [-1; -1; 1:5], [fill(-1, 5); 2:3]]
+                @test trunc_or_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1, :head, :head) ==
+                    [[collect(1:9)], [fill(-1, 4); 1:5], [fill(-1, 7); 2:3]]
+                @test trunc_or_pad(Any[Any[[0,0], 1:10], [1]], 7, -1, :head, :head) ==
+                    [[[fill(-1,5); 0; 0], collect(4:10)], [fill(-1,6); 1]]
+                @test trunc_or_pad(Any[Any[Any[0,1,2]]], 5, 0, :head, :head) == [[[0,0,0,1,2]]]
+            end
         end
 
         @testset "trunc_and_pad" begin
-            x = collect(1:9)
-            @test trunc_and_pad(x, 5, 0) == collect(1:5)
-            @test trunc_and_pad(1:3, 5, 0) == [1:3;]
-            @test trunc_and_pad(x, nothing, 0) == collect(1:9)
-            @test trunc_and_pad(1:3, nothing, 0) == collect(1:3)
+            @testset "trunc=tail pad=tail" begin
+                x = collect(1:9)
+                @test trunc_and_pad(x, 5, 0) == collect(1:5)
+                @test trunc_and_pad(1:3, 5, 0) == [1:3;]
+                @test trunc_and_pad(x, nothing, 0) == collect(1:9)
+                @test trunc_and_pad(1:3, nothing, 0) == collect(1:3)
 
-            @test trunc_and_pad(5, 0)(x) == collect(1:5)
-            @test trunc_and_pad(5, 0)(1:3) == [1:3;]
-            @test trunc_and_pad(nothing, 0)(x) == collect(1:9)
-            @test trunc_and_pad(nothing, 0)(1:3) == collect(1:3)
+                @test trunc_and_pad(5, 0)(x) == collect(1:5)
+                @test trunc_and_pad(5, 0)(1:3) == [1:3;]
+                @test trunc_and_pad(nothing, 0)(x) == collect(1:9)
+                @test trunc_and_pad(nothing, 0)(1:3) == collect(1:3)
 
-            @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], 7, -1) == [[collect(1:7)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
-            @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1) == [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
-            @test trunc_and_pad(Any[Any[[0,0], 1:10], [1]], 7, -1) == [[[0; 0; fill(-1,5)], collect(1:7)], [1; fill(-1,6)]]
-            @test trunc_and_pad(Any[Any[Any[0,1,2]]], 5, 0) == [[[0,1,2]]]
+                @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], 7, -1) ==
+                    [[collect(1:7)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
+                @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1) ==
+                    [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
+                @test trunc_and_pad(Any[Any[[0,0], 1:10], [1]], 7, -1) ==
+                    [[[0; 0; fill(-1,5)], collect(1:7)], [1; fill(-1,6)]]
+                @test trunc_and_pad(Any[Any[Any[0,1,2]]], 5, 0) == [[[0,1,2]]]
+            end
+            @testset "trunc=tail pad=head" begin
+                x = collect(1:9)
+                @test trunc_and_pad(x, 5, 0, :tail, :head) == collect(1:5)
+                @test trunc_and_pad(1:3, 5, 0, :tail, :head) == [1:3;]
+                @test trunc_and_pad(x, nothing, 0, :tail, :head) == collect(1:9)
+                @test trunc_and_pad(1:3, nothing, 0, :tail, :head) == collect(1:3)
+
+                @test trunc_and_pad(5, 0, :tail, :head)(x) == collect(1:5)
+                @test trunc_and_pad(5, 0, :tail, :head)(1:3) == [1:3;]
+                @test trunc_and_pad(nothing, 0, :tail, :head)(x) == collect(1:9)
+                @test trunc_and_pad(nothing, 0, :tail, :head)(1:3) == collect(1:3)
+
+                @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], 7, -1, :tail, :head) ==
+                    [[collect(1:7)], [-1; -1; 1:5], [fill(-1, 5); 2:3]]
+                @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1, :tail, :head) ==
+                    [[collect(1:9)], [fill(-1, 4); 1:5], [fill(-1, 7); 2:3]]
+                @test trunc_and_pad(Any[Any[[0,0], 1:10], [1]], 7, -1, :tail, :head) ==
+                    [[[fill(-1,5); 0; 0], collect(1:7)], [fill(-1,6); 1]]
+                @test trunc_and_pad(Any[Any[Any[0,1,2]]], 5, 0, :tail, :head) == [[[0,1,2]]]
+            end
+            @testset "trunc=head pad=tail" begin
+                x = collect(1:9)
+                @test trunc_and_pad(x, 5, 0, :head, :tail) == collect(5:9)
+                @test trunc_and_pad(1:3, 5, 0, :head, :tail) == [1:3;]
+                @test trunc_and_pad(x, nothing, 0, :head, :tail) == collect(1:9)
+                @test trunc_and_pad(1:3, nothing, 0, :head, :tail) == collect(1:3)
+
+                @test trunc_and_pad(5, 0, :head, :tail)(x) == collect(5:9)
+                @test trunc_and_pad(5, 0, :head, :tail)(1:3) == [1:3;]
+                @test trunc_and_pad(nothing, 0, :head, :tail)(x) == collect(1:9)
+                @test trunc_and_pad(nothing, 0, :head, :tail)(1:3) == collect(1:3)
+
+                @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], 7, -1, :head, :tail) ==
+                    [[collect(3:9)], [1:5; -1; -1], [2:3; fill(-1, 5)]]
+                @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1, :head, :tail) ==
+                    [[collect(1:9)], [1:5; fill(-1, 4)], [2:3; fill(-1, 7)]]
+                @test trunc_and_pad(Any[Any[[0,0], 1:10], [1]], 7, -1, :head, :tail) ==
+                    [[[0; 0; fill(-1,5)], collect(4:10)], [1; fill(-1,6)]]
+                @test trunc_and_pad(Any[Any[Any[0,1,2]]], 5, 0, :head, :tail) == [[[0,1,2]]]
+            end
+            @testset "trunc=head pad=head" begin
+                x = collect(1:9)
+                @test trunc_and_pad(x, 5, 0, :head, :head) == collect(5:9)
+                @test trunc_and_pad(1:3, 5, 0, :head, :head) == [1:3;]
+                @test trunc_and_pad(x, nothing, 0, :head, :head) == collect(1:9)
+                @test trunc_and_pad(1:3, nothing, 0, :head, :head) == collect(1:3)
+
+                @test trunc_and_pad(5, 0, :head, :head)(x) == collect(5:9)
+                @test trunc_and_pad(5, 0, :head, :head)(1:3) == [1:3;]
+                @test trunc_and_pad(nothing, 0, :head, :head)(x) == collect(1:9)
+                @test trunc_and_pad(nothing, 0, :head, :head)(1:3) == collect(1:3)
+
+                @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], 7, -1, :head, :head) ==
+                    [[collect(3:9)], [-1; -1; 1:5], [fill(-1, 5); 2:3]]
+                @test trunc_and_pad(AbstractVector[[x], 1:5, 2:3], nothing, -1, :head, :head) ==
+                    [[collect(1:9)], [fill(-1, 4); 1:5], [fill(-1, 7); 2:3]]
+                @test trunc_and_pad(Any[Any[[0,0], 1:10], [1]], 7, -1, :head, :head) ==
+                    [[[fill(-1,5); 0; 0], collect(4:10)], [fill(-1,6); 1]]
+                @test trunc_and_pad(Any[Any[Any[0,1,2]]], 5, 0, :head, :head) == [[[0,1,2]]]
+            end
         end
 
         @testset "nested2batch" begin
