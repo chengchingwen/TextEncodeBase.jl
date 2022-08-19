@@ -44,11 +44,18 @@ Encode `x`.
 encode(e::AbstractTextEncoder, x) = lookup(e, encode_indices(e, x))
 
 """
+    decode_indices(e::AbstractTextEncoder, x)
+
+Decode `x` by reverse lookup `x` in `e.vocab`.
+"""
+decode_indices(e::AbstractTextEncoder, x) = lookup(eltype(e.vocab), e.vocab, x)
+
+"""
     decode(e::AbstractTextEncoder, x)
 
-Decode `x`.
+Decode `x`. This is basically [`decode_indices`](@ref) but can be overload for post-processing.
 """
-decode(e::AbstractTextEncoder, x) = lookup(eltype(e.vocab), e.vocab, x)
+decode(e::AbstractTextEncoder, x) = decode_indices(e, x)
 
 """
     TextEncoder(tokenizer, vocab, process = nestedcall(getvalue))
