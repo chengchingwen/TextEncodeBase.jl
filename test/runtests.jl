@@ -13,7 +13,8 @@ end
 
 using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     BaseTokenization, NestedTokenizer, FlatTokenizer,
-    WordTokenization, IndexedTokenization, MatchTokenization,
+    WordTokenization, EachSplitTokenization, EachMatchTokenization,
+    IndexedTokenization, MatchTokenization,
     UnicodeNormalizer, CodeNormalizer, CodeUnMap,
     TokenStages, Document, Sentence, Word, Token, Batch
 using TextEncodeBase: getvalue, getmeta, updatevalue,
@@ -63,6 +64,20 @@ end
             @test tkr(word) == [Token(word.x)]
             @test tkr(document) != tkr2(document)
             @test tkr(sentence) != tkr2(sentence)
+        end
+
+        @testset "split tokenizer" begin
+            tkr_s = FlatTokenizer(EachSplitTokenization([' ', ',', '.']))
+            tkr_m = FlatTokenizer(EachMatchTokenization(r"[^\. ]+|\."))
+            @test map(getvalue, tkr_s(document)) == filter(!=("."), mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x)))
+            @test map(getvalue, tkr_s(sentence)) == filter(!=("."), nltk_word_tokenize(sentence.x))
+            @test tkr_s(word) == [Token(word.x)]
+            @test tkr_m(document) == map(Token, mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x)))
+            @test tkr_m(sentence) == map(Token, nltk_word_tokenize(sentence.x))
+            @test tkr_m(word) == [Token(word.x)]
+
+            @test map(getvalue, tkr_s(Sentence("a    b"))) == ["a", "b"]
+            @test map(getvalue, tkr_m(Sentence("a    b"))) == ["a", "b"]
         end
 
         @testset "index tokenizer" begin
