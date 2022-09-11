@@ -2,7 +2,11 @@ struct EachSplitTokenization{S} <: BaseTokenization
     splitter::S
 end
 
-splitting(t::EachSplitTokenization, s::SentenceStage) = eachsplit(getvalue(s), t.splitter)
+@static if VERSION < v"1.8"
+    splitting(t::EachSplitTokenization, s::SentenceStage) = split(getvalue(s), t.splitter)
+else
+    splitting(t::EachSplitTokenization, s::SentenceStage) = eachsplit(getvalue(s), t.splitter)
+end
 
 struct EachMatchTokenization <: BaseTokenization
     pattern::Regex
