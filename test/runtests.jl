@@ -128,6 +128,16 @@ end
             @test tkr(updatevalue(uppercase, word)) == [Token(lowercase(word.x))]
         end
 
+        @testset "replace normalizer" begin
+            tkr = FlatTokenizer(TextEncodeBase.ReplaceNormalizer(r"\d+"=>"NUMBER"))
+            @test map(getvalue, tkr(document)) ==
+                map(x->replace(x, r"\d+"=>"NUMBER"),
+                    mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x)))
+            @test map(getvalue, tkr(sentence)) ==
+                map(x->replace(x, r"\d+"=>"NUMBER"), nltk_word_tokenize(sentence.x))
+            @test tkr(word) == [Token(word.x)]
+        end
+
         @testset "code normalizer" begin
             tkr = FlatTokenizer(CodeNormalizer('a':'z'=>'A':'Z', 'A':'Z'=>'a':'z'))
             @test tkr(updatevalue(uppercase, document)) ==

@@ -60,6 +60,16 @@ function Base.show(io::IO, t::UnicodeNormalizer)
     end
 end
 
+### replace
+
+struct ReplaceNormalizer{T<:AbstractTokenization, P<:Pair} <: SentenceNormalizer{T}
+    base::T
+    pattern::P
+end
+ReplaceNormalizer(pattern) = ReplaceNormalizer(DefaultTokenization(), pattern)
+
+normalizer(t::ReplaceNormalizer) = Base.Fix2(replace, t.pattern)
+
 ### Codemap
 
 include("./codemap.jl")
