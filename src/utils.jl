@@ -523,3 +523,204 @@ function _nested2batch!(arr, offset, x::AbstractArray{>:AbstractArray})
         error("Input array is mixing array and non-array elements")
     end
 end
+
+# Sequence template
+
+abstract type TemplateTerm{T} end
+
+
+"""
+    InputTerm{T}(type_id = 1)
+
+A `TemplateTerm` that take out a sequence from the input.
+"""
+struct InputTerm{T} <: TemplateTerm{T}
+    type_id::Int
+    InputTerm{T}(type_id = 1) where T = new{T}(type_id)
+end
+
+"""
+    IndexInputTerm{T}(idx::Int, type_id = 1)
+
+A `TemplateTerm` that take the `idx`-th sequence of the input. If the `IndexInputTerm` is also the `idx`-th
+ input related term in a [`SequenceTemplate`](@ref), it behave the same as [`InputTerm`](@ref).
+"""
+struct IndexInputTerm{T} <: TemplateTerm{T}
+    idx::Int
+    type_id::Int
+    IndexInputTerm{T}(idx, type_id = 1) where T = new{T}(idx, type_id)
+end
+
+"""
+    ConstTerm(value::T, type_id = 1)
+
+A `TemplateTerm` that simply put `value` to the output sequence.
+"""
+struct ConstTerm{T} <: TemplateTerm{T}
+    value::T
+    type_id::Int
+end
+ConstTerm(value, type_id = 1) = ConstTerm{typeof(value)}(value, type_id)
+
+"""
+    RepeatedTerm(terms::TemplateTerm...)
+
+A special term that indicate the `terms` sequence can appear zero or multiple times. Cannot be nested.
+"""
+struct RepeatedTerm{T, Ts<:Tuple{Vararg{TemplateTerm{T}}}} <: TemplateTerm{T}
+    terms::Ts
+    function RepeatedTerm(terms::Tuple{Vararg{TemplateTerm{T}}}) where T
+        @assert length(terms) >= 1 "No TemplateTerm provided."
+        @assert !any(Base.Fix2(isa, RepeatedTerm), terms) "Cannot nest RepeatedTerm"
+        return new{T, typeof(terms)}(terms)
+    end
+end
+RepeatedTerm(terms::TemplateTerm...) = RepeatedTerm(terms)
+
+"""
+    SequenceTemplate(terms::TemplateTerm)(sequences...)
+
+Constructing a function by multiple `TemplateTerm` that indicate how to combine the input `sequences`. Return
+ a tuple of the result sequence and a type id (a special number associated with the template term) sequence.
+
+# Example
+
+```julia-repl
+julia> SequenceTemplate(ConstTerm(-1), InputTerm{Int}(), ConstTerm(-2))(1:5)[1] == TextEncodeBase.with_head_tail(1:5, -1, -2)
+true
+
+julia> SequenceTemplate(ConstTerm(-1), InputTerm{Int}(), ConstTerm(-2))(1:5)
+([-1, 1, 2, 3, 4, 5, -2], [1, 1, 1, 1, 1, 1, 1])
+
+julia> bert_template = SequenceTemplate(
+           ConstTerm("[CLS]", 1), InputTerm{String}(1), ConstTerm("[SEP]", 1),
+           RepeatedTerm(InputTerm{String}(2), ConstTerm("[SEP]", 2))
+       )
+SequenceTemplate{String}([CLS]:<type=1> Input:<type=1> [SEP]:<type=1> (Input:<type=2> [SEP]:<type=2>)...)
+
+julia> bert_template(["hello", "world"])
+(["[CLS]", "hello", "world", "[SEP]"], [1, 1, 1, 1])
+
+julia> bert_template(["hello", "world"], ["today", "is", "a", "good", "day"])
+(["[CLS]", "hello", "world", "[SEP]", "today", "is", "a", "good", "day", "[SEP]"], [1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
+
+```
+"""
+struct SequenceTemplate{T, Ts<:Tuple{Vararg{TemplateTerm{T}}}} <: Function
+    terms::Ts
+    function SequenceTemplate(terms::Tuple{Vararg{TemplateTerm{T}}}) where T
+        @assert length(terms) >= 1 "No TemplateTerm provided."
+        @assert count(Base.Fix2(isa, RepeatedTerm), terms) <= 1 "RepeatedTerm can only appear at most once."
+        return new{T, typeof(terms)}(terms)
+    end
+end
+SequenceTemplate(terms::TemplateTerm...) = SequenceTemplate(terms)
+
+function process_term!(term::InputTerm, output, type_ids, i, j, terms, xs)
+    @assert j <= length(xs) "InputTerm indexing $j-th input but only get $(length(xs))"
+    x = xs[j]
+    append!(output, x)
+    append!(type_ids, Iterators.repeated(term.type_id, length(x)))
+    return j + 1
+end
+
+function process_term!(term::IndexInputTerm, output, type_ids, i, j, terms, xs)
+    idx = term.idx
+    @assert idx <= length(xs) "IndexInputTerm indexing $idx-th input but only get $(length(xs))"
+    x = xs[idx]
+    append!(output, x)
+    append!(type_ids, Iterators.repeated(term.type_id, length(x)))
+    return idx == j ? j + 1 : j
+end
+
+function process_term!(term::ConstTerm, output, type_ids, i, j, terms, xs)
+    push!(output, term.value)
+    push!(type_ids, term.type_id)
+    return j
+end
+
+function process_term!(term::RepeatedTerm, output, type_ids, i, j, terms, xs)
+    r_terms = term.terms
+    n = count(Base.Fix2(isa, InputTerm), terms[i+1:end])
+    J = length(xs) - n
+    while j <= J
+        _j = j
+        for (t_i, term_i) in enumerate(r_terms)
+            j = process_term!(term_i, output, type_ids, t_i, j, r_terms, xs)
+        end
+        _j == j && error("RepeatedTerm doesn't seem to terminate")
+    end
+    return j
+end
+
+apply_template(st::SequenceTemplate) = Base.Fix1(apply_template, st)
+function apply_template(st::SequenceTemplate{T}, xs) where T
+    terms = st.terms
+    len = length(xs)
+    n_input = count(Base.Fix2(isa, InputTerm), terms)
+    @assert len >= n_input "SequenceTemplate require at least $n_input but only get $len"
+
+    output = Vector{T}()
+    type_ids = Vector{Int}()
+
+    j = 1
+    for (i, term) in enumerate(terms)
+         j = process_term!(term, output, type_ids, i, j, terms, xs)
+    end
+    @assert j > len "SequenceTemplate only take $(j-1) inputs but get $len"
+    return output, type_ids
+end
+
+## static single sample
+(st::SequenceTemplate{T})(xs::AbstractVector{T}...) where T = apply_template(st, xs)
+(st::SequenceTemplate{T})(xs::Tuple{Vararg{AbstractVector{T}}}) where T = apply_template(st, xs)
+(st::SequenceTemplate{T})(xs::AbstractVector{<:AbstractVector{T}}) where T = apply_template(st, xs)
+
+## static multiple sample
+(st::SequenceTemplate{T})(xs::AbstractArray{<:AbstractVector{<:AbstractVector{T}}}) where T = map(apply_template(st), xs)
+
+## dynamic
+function (st::SequenceTemplate{T})(xs::AbstractArray) where T
+    aoa, aov = allany(Base.Fix2(isa, AbstractArray), xs)
+    if aoa
+        if all(Base.Fix1(all, Base.Fix2(isa, T)), xs) # dynamic single sample
+            # xs is an array of sequence
+            return apply_template(st, xs)
+        elseif all(Base.Fix1(all, Base.Fix2(isa, AbstractArray)), xs) # dynamic multiple sample
+            # xs is an array of array of array
+            return map(st, xs)
+        else
+            throw(MethodError(st, xs))
+        end
+    elseif aov # dynamic single sample
+        # xs is a sequence
+        !all(Base.Fix2(isa, T), xs) && throw(MethodError(st, xs)) # assert eltype of sequence == T
+        return apply_template(st, (xs,))
+    else
+        throw(MethodError(st, xs))
+    end
+end
+
+_show(io, t::InputTerm) = print(io, "Input:<type=$(t.type_id)>")
+_show(io, t::IndexInputTerm) = print(io, "Input[$(t.idx)]:<type=$(t.type_id)>")
+_show(io, t::ConstTerm) = print(io, "$(t.value):<type=$(t.type_id)>")
+function _show(io, t::RepeatedTerm)
+    print(io, '(')
+    _show(io, first(t.terms))
+    for term in Base.tail(t.terms)
+        print(io, ' ')
+        _show(io, term)
+    end
+    print(io, ")...")
+end
+
+Base.show(io::IO, ::MIME"text/plain", st::SequenceTemplate) = show(io, st)
+function Base.show(io::IO, st::SequenceTemplate{T}) where T
+    print(io, "SequenceTemplate{", T, "}(")
+    _show(io, first(st.terms))
+    for term in Base.tail(st.terms)
+        print(io, ' ')
+        _show(io, term)
+    end
+    print(io, ')')
+end

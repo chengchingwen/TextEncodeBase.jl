@@ -19,6 +19,7 @@ using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     TokenStages, Document, Sentence, Word, Token, Batch
 using TextEncodeBase: getvalue, getmeta, updatevalue,
     with_head_tail, trunc_and_pad, trunc_or_pad, nested2batch, nestedcall
+using TextEncodeBase: SequenceTemplate, InputTerm, IndexInputTerm, ConstTerm, RepeatedTerm
 
 using WordTokenizers
 
@@ -700,6 +701,38 @@ end
             @test nested2batch(y5) == x
 
             @test_throws DimensionMismatch nested2batch([[1:5], 2:6])
+        end
+
+        @testset "SequenceTemplate" begin
+            x = collect(1:5)
+            head_tail_template = SequenceTemplate(ConstTerm(-1), InputTerm{Int}(), ConstTerm(-2))
+            @test head_tail_template(x)[1] == with_head_tail(x, -1, -2)
+            @test nestedcall(x->x[1], head_tail_template(AbstractVector[[x], [1:5], [2:3]])) ==
+                map(x->x[1], with_head_tail(AbstractVector[[x], [1:5], [2:3]], -1, -2))
+            @test nestedcall(x->x[1], head_tail_template(Any[Any[x], [1:5], [2:3]])) ==
+                map(x->x[1], with_head_tail(Any[Any[x], [1:5], [2:3]], -1, -2))
+            @test nestedcall(x->x[1], head_tail_template(Any[Any[Any[0,1,2]]])) ==
+                with_head_tail(Any[Any[Any[0,1,2]]], -1, -2)[1]
+            @test_throws MethodError head_tail_template(Any[Any[x], 1:5, 2:3])
+            @test_throws Exception head_tail_template(Any[1:5, 2:3])
+            @test_throws Exception head_tail_template(Any[1:5, 2:3])
+            bert_template = SequenceTemplate(
+                ConstTerm("[CLS]", 1), InputTerm{String}(1), ConstTerm("[SEP]", 1), 
+                RepeatedTerm(InputTerm{String}(2), ConstTerm("[SEP]", 2))
+            )
+            @test bert_template(["A"]) == (["[CLS]", "A", "[SEP]"], [1,1,1])
+            @test bert_template(["A"], ["B"]) == (["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])
+            @test bert_template([["A"], ["B"]]) == (["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])
+            @test bert_template([[["A"], ["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
+            @test bert_template(Any[[["A"], ["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
+            @test bert_template([Any[["A"], ["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
+            @test bert_template([Any[Any["A"], Any["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
+            @test bert_template(Any[Any[Any["A"], Any["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
+            trail_template = SequenceTemplate(
+                IndexInputTerm{Int}(1, 1), RepeatedTerm(InputTerm{Int}(2)), IndexInputTerm{Int}(1, 1)
+            )
+            @test trail_template([3,5]) == ([3,5,3,5], [1,1,1,1])
+            @test trail_template([3,5],[1,2,4]) == ([3,5,1,2,4,3,5], [1,1,2,2,2,1,1])
         end
     end
 
