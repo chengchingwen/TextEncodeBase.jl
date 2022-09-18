@@ -526,8 +526,12 @@ end
 
 # Sequence template
 
-abstract type TemplateTerm{T} end
+"""
+    abstract type TemplateTerm{T} end
 
+Abstract type for term used in [`SequenceTemplate`](@ref).
+"""
+abstract type TemplateTerm{T} end
 
 """
     InputTerm{T}(type_id = 1)
