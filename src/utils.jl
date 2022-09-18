@@ -563,19 +563,22 @@ end
 ConstTerm(value, type_id = 1) = ConstTerm{typeof(value)}(value, type_id)
 
 """
-    RepeatedTerm(terms::TemplateTerm...)
+    RepeatedTerm(terms::TemplateTerm...; dynamic_type_id = false)
 
 A special term that indicate the `terms` sequence can appear zero or multiple times. Cannot be nested.
+ If `dynamic_type_id` is set, each repeat would add an offset value to the type id of those repeat `terms`.
+ The offset value if the number of repetiton, starting form `0`, times `dynamic_type_id`.
 """
 struct RepeatedTerm{T, Ts<:Tuple{Vararg{TemplateTerm{T}}}} <: TemplateTerm{T}
     terms::Ts
-    function RepeatedTerm(terms::Tuple{Vararg{TemplateTerm{T}}}) where T
+    dynamic_type_id::Int
+    function RepeatedTerm(terms::Tuple{Vararg{TemplateTerm{T}}}, dynamic_type_id = false) where T
         @assert length(terms) >= 1 "No TemplateTerm provided."
         @assert !any(Base.Fix2(isa, RepeatedTerm), terms) "Cannot nest RepeatedTerm"
-        return new{T, typeof(terms)}(terms)
+        return new{T, typeof(terms)}(terms, dynamic_type_id)
     end
 end
-RepeatedTerm(terms::TemplateTerm...) = RepeatedTerm(terms)
+RepeatedTerm(terms::TemplateTerm...; dynamic_type_id = false) = RepeatedTerm(terms, dynamic_type_id)
 
 """
     SequenceTemplate(terms::TemplateTerm)(sequences...)
@@ -641,14 +644,20 @@ end
 
 function process_term!(term::RepeatedTerm, output, type_ids, i, j, terms, xs)
     r_terms = term.terms
+    dynamic_type_id = term.dynamic_type_id
     n = count(Base.Fix2(isa, InputTerm), terms[i+1:end])
     J = length(xs) - n
+    type_id_offset = 0
     while j <= J
+        type_id_start = length(type_ids) + 1
         _j = j
         for (t_i, term_i) in enumerate(r_terms)
             j = process_term!(term_i, output, type_ids, t_i, j, r_terms, xs)
         end
         _j == j && error("RepeatedTerm doesn't seem to terminate")
+        type_id_end = length(type_ids)
+        dynamic_type_id != 0 && (type_ids[type_id_start:type_id_end] .+= type_id_offset)
+        type_id_offset += dynamic_type_id
     end
     return j
 end
@@ -711,7 +720,11 @@ function _show(io, t::RepeatedTerm)
         print(io, ' ')
         _show(io, term)
     end
-    print(io, ")...")
+    if iszero(t.dynamic_type_id)
+        print(io, ")...")
+    else
+        print(io, ")<type+=$(t.dynamic_type_id)>...")
+    end
 end
 
 Base.show(io::IO, ::MIME"text/plain", st::SequenceTemplate) = show(io, st)
