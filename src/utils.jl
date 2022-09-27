@@ -533,6 +533,8 @@ Abstract type for term used in [`SequenceTemplate`](@ref).
 """
 abstract type TemplateTerm{T} end
 
+Base.eltype(::TemplateTerm{T}) where T = T
+
 """
     InputTerm{T}(type_id = 1)
 
@@ -623,11 +625,13 @@ struct SequenceTemplate{T, Ts<:Tuple{Vararg{TemplateTerm{T}}}} <: Function
 end
 SequenceTemplate(terms::TemplateTerm...) = SequenceTemplate(terms)
 
+Base.eltype(::SequenceTemplate{T}) where T = T
+
 function process_term!(term::InputTerm, output, type_ids, i, j, terms, xs)
     @assert j <= length(xs) "InputTerm indexing $j-th input but only get $(length(xs))"
     x = xs[j]
-    append!(output, x)
-    append!(type_ids, Iterators.repeated(term.type_id, length(x)))
+    isnothing(output)   || append!(output, x)
+    isnothing(type_ids) || append!(type_ids, Iterators.repeated(term.type_id, length(x)))
     return j + 1
 end
 
@@ -635,14 +639,14 @@ function process_term!(term::IndexInputTerm, output, type_ids, i, j, terms, xs)
     idx = term.idx
     @assert idx <= length(xs) "IndexInputTerm indexing $idx-th input but only get $(length(xs))"
     x = xs[idx]
-    append!(output, x)
-    append!(type_ids, Iterators.repeated(term.type_id, length(x)))
+    isnothing(output)   || append!(output, x)
+    isnothing(type_ids) || append!(type_ids, Iterators.repeated(term.type_id, length(x)))
     return idx == j ? j + 1 : j
 end
 
 function process_term!(term::ConstTerm, output, type_ids, i, j, terms, xs)
-    push!(output, term.value)
-    push!(type_ids, term.type_id)
+    isnothing(output)   || push!(output, term.value)
+    isnothing(type_ids) || push!(type_ids, term.type_id)
     return j
 end
 
@@ -653,62 +657,98 @@ function process_term!(term::RepeatedTerm, output, type_ids, i, j, terms, xs)
     J = length(xs) - n
     type_id_offset = 0
     while j <= J
-        type_id_start = length(type_ids) + 1
+        if !isnothing(type_ids)
+            type_id_start = length(type_ids) + 1
+        end
+
         _j = j
         for (t_i, term_i) in enumerate(r_terms)
             j = process_term!(term_i, output, type_ids, t_i, j, r_terms, xs)
         end
         _j == j && error("RepeatedTerm doesn't seem to terminate")
-        type_id_end = length(type_ids)
-        dynamic_type_id != 0 && (type_ids[type_id_start:type_id_end] .+= type_id_offset)
-        type_id_offset += dynamic_type_id
+
+        if !isnothing(type_ids)
+            type_id_end = length(type_ids)
+            dynamic_type_id != 0 && (type_ids[type_id_start:type_id_end] .+= type_id_offset)
+            type_id_offset += dynamic_type_id
+        end
     end
     return j
 end
 
-apply_template(st::SequenceTemplate) = Base.Fix1(apply_template, st)
-function apply_template(st::SequenceTemplate{T}, xs) where T
+function process_template!(
+    st::SequenceTemplate{T}, output::Union{Vector{T}, Nothing}, type_ids::Union{Vector{Int}, Nothing}, xs
+) where T
     terms = st.terms
     len = length(xs)
     n_input = count(Base.Fix2(isa, InputTerm), terms)
     @assert len >= n_input "SequenceTemplate require at least $n_input but only get $len"
-
-    output = Vector{T}()
-    type_ids = Vector{Int}()
 
     j = 1
     for (i, term) in enumerate(terms)
          j = process_term!(term, output, type_ids, i, j, terms, xs)
     end
     @assert j > len "SequenceTemplate only take $(j-1) inputs but get $len"
+
     return output, type_ids
 end
+
+alloc_outputs(st::SequenceTemplate, ::Val{0}) = (Vector{eltype(st)}(), Vector{Int}())
+alloc_outputs(st::SequenceTemplate, ::Val{1}) = (Vector{eltype(st)}(), nothing)
+alloc_outputs(st::SequenceTemplate, ::Val{2}) = (nothing, Vector{Int}())
+alloc_outputs(st::SequenceTemplate, ::Val{-1}) = (nothing, nothing)
+
+apply_template(st::SequenceTemplate) = Base.Fix1(apply_template, st)
+apply_template(st::SequenceTemplate, val::Val) = xs -> apply_template(st, val, xs)
+apply_template(st::SequenceTemplate, xs) = apply_template!(st, (Vector{eltype(st)}(), Vector{Int}()), xs)
+apply_template(st::SequenceTemplate, val::Val, xs) = apply_template!(st, alloc_outputs(st, val), xs)
+
+function apply_template!(st::SequenceTemplate, buffers::Tuple{A, B}, xs) where {A, B}
+    output, type_ids = process_template!(st, buffers[1], buffers[2], xs)
+    if !(isnothing(output) || isnothing(type_ids))
+        return output, type_ids
+    elseif !isnothing(output)
+        return output
+    elseif !isnothing(type_ids)
+        return type_ids
+    else
+        return nothing
+    end
+end
+
+(st::SequenceTemplate)(val::Val) = Base.Fix1(st, val)
 
 ## static single sample
 (st::SequenceTemplate{T})(xs::AbstractVector{T}...) where T = apply_template(st, xs)
 (st::SequenceTemplate{T})(xs::Tuple{Vararg{AbstractVector{T}}}) where T = apply_template(st, xs)
 (st::SequenceTemplate{T})(xs::AbstractVector{<:AbstractVector{T}}) where T = apply_template(st, xs)
+(st::SequenceTemplate{T})(val::Val, x::AbstractVector{T}, xs::AbstractVector{T}...) where T = apply_template(st, val, (x, xs...))
+(st::SequenceTemplate{T})(val::Val, xs::Tuple{Vararg{AbstractVector{T}}}) where T = apply_template(st, val, xs)
+(st::SequenceTemplate{T})(val::Val, xs::AbstractVector{<:AbstractVector{T}}) where T = apply_template(st, val, xs)
+
 
 ## static multiple sample
 (st::SequenceTemplate{T})(xs::AbstractArray{<:AbstractVector{<:AbstractVector{T}}}) where T = map(apply_template(st), xs)
+(st::SequenceTemplate{T})(val::Val, xs::AbstractArray{<:AbstractVector{<:AbstractVector{T}}}) where T = map(apply_template(st, val), xs)
 
 ## dynamic
-function (st::SequenceTemplate{T})(xs::AbstractArray) where T
+(st::SequenceTemplate)(xs::AbstractArray) = st(Val(0), xs)
+function (st::SequenceTemplate{T})(val::Val, xs::AbstractArray) where T
     aoa, aov = allany(Base.Fix2(isa, AbstractArray), xs)
     if aoa
         if all(Base.Fix1(all, Base.Fix2(isa, T)), xs) # dynamic single sample
             # xs is an array of sequence
-            return apply_template(st, xs)
+            return apply_template(st, val, xs)
         elseif all(Base.Fix1(all, Base.Fix2(isa, AbstractArray)), xs) # dynamic multiple sample
             # xs is an array of array of array
-            return map(st, xs)
+            return map(st(val), xs)
         else
             throw(MethodError(st, xs))
         end
     elseif aov # dynamic single sample
         # xs is a sequence
         !all(Base.Fix2(isa, T), xs) && throw(MethodError(st, xs)) # assert eltype of sequence == T
-        return apply_template(st, (xs,))
+        return apply_template(st, val, (xs,))
     else
         throw(MethodError(st, xs))
     end

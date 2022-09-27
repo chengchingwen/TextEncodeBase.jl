@@ -725,7 +725,12 @@ end
             @test bert_template(["A"], ["B"], ["C"]) ==
                 (["[CLS]", "A", "[SEP]", "B", "[SEP]", "C", "[SEP]"], [1,1,1,2,2,2,2])
             @test bert_template([["A"], ["B"]]) == (["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])
+            @test bert_template(Val(1), [["A"], ["B"]]) == ["[CLS]", "A", "[SEP]", "B", "[SEP]"]
+            @test bert_template(Val(2), [["A"], ["B"]]) == [1,1,1,2,2]
+            @test bert_template(Val(-1), [["A"], ["B"]]) == nothing
             @test bert_template([[["A"], ["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
+            @test bert_template(Val(1), [[["A"], ["B"]]]) == [["[CLS]", "A", "[SEP]", "B", "[SEP]"]]
+            @test bert_template(Val(2), [[["A"], ["B"]]]) == [[1,1,1,2,2]]
             @test bert_template(Any[[["A"], ["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
             @test bert_template([Any[["A"], ["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
             @test bert_template([Any[Any["A"], Any["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
