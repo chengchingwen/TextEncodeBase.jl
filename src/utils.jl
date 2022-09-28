@@ -700,7 +700,7 @@ alloc_outputs(st::SequenceTemplate, ::Val{-1}) = (nothing, nothing)
 
 apply_template(st::SequenceTemplate) = Base.Fix1(apply_template, st)
 apply_template(st::SequenceTemplate, val::Val) = xs -> apply_template(st, val, xs)
-apply_template(st::SequenceTemplate, xs) = apply_template!(st, (Vector{eltype(st)}(), Vector{Int}()), xs)
+apply_template(st::SequenceTemplate, xs) = apply_template(st, Val(0), xs)
 apply_template(st::SequenceTemplate, val::Val, xs) = apply_template!(st, alloc_outputs(st, val), xs)
 
 function apply_template!(st::SequenceTemplate, buffers::Tuple{A, B}, xs) where {A, B}
@@ -717,22 +717,19 @@ function apply_template!(st::SequenceTemplate, buffers::Tuple{A, B}, xs) where {
 end
 
 (st::SequenceTemplate)(val::Val) = Base.Fix1(st, val)
+(st::SequenceTemplate)(x::AbstractArray) = st(Val(0), x)
+(st::SequenceTemplate{T})(xs::AbstractVector{T}...) where T = st(xs)
+(st::SequenceTemplate{T})(xs::Tuple{Vararg{AbstractVector{T}}}) where T = st(Val(0), xs)
 
 ## static single sample
-(st::SequenceTemplate{T})(xs::AbstractVector{T}...) where T = apply_template(st, xs)
-(st::SequenceTemplate{T})(xs::Tuple{Vararg{AbstractVector{T}}}) where T = apply_template(st, xs)
-(st::SequenceTemplate{T})(xs::AbstractVector{<:AbstractVector{T}}) where T = apply_template(st, xs)
 (st::SequenceTemplate{T})(val::Val, x::AbstractVector{T}, xs::AbstractVector{T}...) where T = apply_template(st, val, (x, xs...))
 (st::SequenceTemplate{T})(val::Val, xs::Tuple{Vararg{AbstractVector{T}}}) where T = apply_template(st, val, xs)
 (st::SequenceTemplate{T})(val::Val, xs::AbstractVector{<:AbstractVector{T}}) where T = apply_template(st, val, xs)
 
-
 ## static multiple sample
-(st::SequenceTemplate{T})(xs::AbstractArray{<:AbstractVector{<:AbstractVector{T}}}) where T = map(apply_template(st), xs)
 (st::SequenceTemplate{T})(val::Val, xs::AbstractArray{<:AbstractVector{<:AbstractVector{T}}}) where T = map(apply_template(st, val), xs)
 
 ## dynamic
-(st::SequenceTemplate)(xs::AbstractArray) = st(Val(0), xs)
 function (st::SequenceTemplate{T})(val::Val, xs::AbstractArray) where T
     aoa, aov = allany(Base.Fix2(isa, AbstractArray), xs)
     if aoa
