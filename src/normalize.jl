@@ -62,13 +62,23 @@ end
 
 ### replace
 
-struct ReplaceNormalizer{T<:AbstractTokenization, P<:Pair} <: SentenceNormalizer{T}
+struct SentenceReplaceNormalizer{T<:AbstractTokenization, P<:Pair} <: SentenceNormalizer{T}
     base::T
     pattern::P
 end
-ReplaceNormalizer(pattern) = ReplaceNormalizer(DefaultTokenization(), pattern)
+SentenceReplaceNormalizer(pattern) = SentenceReplaceNormalizer(DefaultTokenization(), pattern)
 
-normalizer(t::ReplaceNormalizer) = Base.Fix2(replace, t.pattern)
+normalizer(t::SentenceReplaceNormalizer) = Base.Fix2(replace, t.pattern)
+
+struct WordReplaceNormalizer{T<:AbstractTokenization, P<:Pair} <: WordNormalizer{T}
+    base::T
+    pattern::P
+end
+WordReplaceNormalizer(pattern) = WordReplaceNormalizer(DefaultTokenization(), pattern)
+
+normalizer(t::WordReplaceNormalizer) = Base.Fix2(replace, t.pattern)
+
+const ReplaceNormalizer = SentenceReplaceNormalizer
 
 ### Codemap
 

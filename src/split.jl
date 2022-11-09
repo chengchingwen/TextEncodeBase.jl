@@ -3,9 +3,9 @@ struct EachSplitTokenization{S} <: BaseTokenization
 end
 
 @static if VERSION < v"1.8"
-    splitting(t::EachSplitTokenization, s::SentenceStage) = split(getvalue(s), t.splitter)
+    splitting(t::EachSplitTokenization, s::SentenceStage) = split(getvalue(s), t.splitter; keepempty = false)
 else
-    splitting(t::EachSplitTokenization, s::SentenceStage) = eachsplit(getvalue(s), t.splitter)
+    splitting(t::EachSplitTokenization, s::SentenceStage) = eachsplit(getvalue(s), t.splitter; keepempty = false)
 end
 
 struct EachMatchTokenization <: BaseTokenization

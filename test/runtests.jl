@@ -16,6 +16,7 @@ using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     WordTokenization, EachSplitTokenization, EachMatchTokenization,
     IndexedTokenization, MatchTokenization,
     UnicodeNormalizer, CodeNormalizer, CodeUnMap,
+    SentenceReplaceNormalizer, WordReplaceNormalizer,
     TokenStages, Document, Sentence, Word, Token, Batch
 using TextEncodeBase: getvalue, getmeta, updatevalue,
     with_head_tail, trunc_and_pad, trunc_or_pad, nested2batch, nestedcall
@@ -137,6 +138,17 @@ end
             @test map(getvalue, tkr(sentence)) ==
                 map(x->replace(x, r"\d+"=>"NUMBER"), nltk_word_tokenize(sentence.x))
             @test tkr(word) == [Token(word.x)]
+
+            tkr1 = FlatTokenizer(SentenceReplaceNormalizer(r"(.+)"=>s"--\1"))
+            @test map(getvalue, tkr1(document)) ==
+                mapfoldl(nltk_word_tokenize ∘ Base.Fix1(*, "--"), append!, split_sentences(document.x))
+            @test map(getvalue, tkr1(sentence)) == nltk_word_tokenize("--" * sentence.x)
+            @test tkr1(word) == [Token("--" * word.x)]
+            tkr2 = FlatTokenizer(WordReplaceNormalizer(r"(.+)"=>s"--\1"))
+            @test map(getvalue, tkr2(document)) == map(
+                Base.Fix1(*, "--"), mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x)))
+            @test map(getvalue, tkr2(sentence)) == map(Base.Fix1(*, "--"), nltk_word_tokenize(sentence.x))
+            @test tkr2(word) == [Token("--" * word.x)]
         end
 
         @testset "code normalizer" begin
