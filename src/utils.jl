@@ -2,6 +2,11 @@ using FuncPipelines: FixRest
 
 using Base.PCRE
 
+isnestedconcretetype(_) = true
+@generated function isnestedconcretetype(::Type{T}) where T
+    return isconcretetype(T) && all(isnestedconcretetype, T.parameters)
+end
+
 # match utils
 
 literal_match_regex(s::Union{AbstractString, AbstractChar}, flags...) = Regex(Base.wrap_string(s, UInt32(0)), flags...)
@@ -739,8 +744,15 @@ end
 ## static multiple sample
 (st::SequenceTemplate{T})(val::Val, xs::AbstractArray{<:AbstractVector{<:AbstractVector{T}}}) where T = map(apply_template(st, val), xs)
 
-## dynamic
+## deep nested or dynamic
 function (st::SequenceTemplate{T})(val::Val, xs::AbstractArray) where T
+    if isnestedconcretetype(typeof(xs))
+        ET = Core.Compiler.return_type(st, Tuple{typeof(val), eltype(xs)})
+        RT = Array{ET, ndims(xs)}
+        y = RT(undef, size(xs))
+        map!(st(val), y, xs)
+        return y
+    end
     aoa, aov = allany(Base.Fix2(isa, AbstractArray), xs)
     if aoa
         if all(Base.Fix1(all, Base.Fix2(isa, T)), xs) # dynamic single sample
