@@ -340,8 +340,13 @@ julia> TextEncodeBase.trunc_or_pad([1:5, [2:7, [1:2]]], nothing, -1)
 """
 trunc_or_pad(x::AbstractArray, n::Integer, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
     trunc_or_pad!(similar(x, n), x, n, pad, trunc_end, pad_end)
-trunc_or_pad(x::AbstractArray{<:AbstractArray}, n::Integer, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
-    map(trunc_or_pad(n, pad, trunc_end, pad_end), x)
+function trunc_or_pad(x::AbstractArray{<:AbstractArray}, n::Integer, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail)
+    ET = Core.Compiler.return_type(trunc_or_pad, Tuple{eltype(x), Int, typeof(pad), Symbol, Symbol})
+    RT = Array{ET, ndims(x)}
+    y = RT(undef, size(x))
+    map!(trunc_or_pad(n, pad, trunc_end, pad_end), y, x)
+    return y
+end
 function trunc_or_pad(
     x::AbstractArray{>:AbstractArray}, n::Integer, pad,
     trunc_end::Symbol = :tail, pad_end::Symbol = :tail,
@@ -458,7 +463,11 @@ end
 
 _checkeqsize(x, y) = x == y ? x : throw(DimensionMismatch("nested size not the same: $x != $y"))
 
-nestedsize(x::AbstractArray{<:AbstractArray}) = (mapfoldl(nestedsize, _checkeqsize, x)..., size(x)...)
+function nestedsize(x::AbstractArray{<:AbstractArray})
+    s1 = nestedsize(first(x))
+    mapfoldl(nestedsize, _checkeqsize, @view(reshape(x, :)[2:end]); init = s1)
+    (s1..., size(x)...)
+end
 nestedsize(x::AbstractArray) = size(x)
 function nestedsize(x::AbstractArray{>:AbstractArray})
     aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
@@ -504,7 +513,8 @@ julia> TextEncodeBase.nested2batch([[[1 2],[3 4]]])
 ```
 """
 function nested2batch(x)
-    arr = Array{nestedtype(x)}(undef, nestedsize(x))
+    ns = nestedsize(x)
+    arr = Array{nestedtype(x), length(ns)}(undef, ns)
     _nested2batch!(arr, 1, x)
     return arr
 end
