@@ -742,16 +742,44 @@ end
 (st::SequenceTemplate{T})(val::Val, xs::AbstractVector{<:AbstractVector{T}}) where T = apply_template(st, val, xs)
 
 ## static multiple sample
-(st::SequenceTemplate{T})(val::Val, xs::AbstractArray{<:AbstractVector{<:AbstractVector{T}}}) where T = map(apply_template(st, val), xs)
+function (st::SequenceTemplate{T})(val::Val, xs::AbstractArray{<:AbstractVector{<:AbstractVector{T}}}) where T
+    if val == Val(0)
+        outputs = map(apply_template(st, Val(1)), xs)
+        type_ids = map(apply_template(st, Val(2)), xs)
+        return outputs, type_ids
+    elseif val == Val(-1)
+        foreach(apply_template(st, Val(-1)), xs)
+        return nothing
+    else
+        return map(apply_template(st, val), xs)
+    end
+end
 
 ## deep nested or dynamic
+@inline function _st_call(st::SequenceTemplate, val::Val, xs::AbstractArray)
+    ET = Core.Compiler.return_type(st, Tuple{typeof(val), eltype(xs)})
+    RT = Array{ET, ndims(xs)}
+    y = RT(undef, size(xs))
+    map!(st(val), y, xs)
+    return y
+end
+
+@inline function _st_nested(st::SequenceTemplate, val::Val, xs::AbstractArray)
+    if val == Val(0)
+        outputs = _st_call(st, Val(1), xs)
+        type_ids = _st_call(st, Val(2), xs)
+        return outputs, type_ids
+    elseif val == Val(-1)
+        foreach(st(Val(-1)), xs)
+        return nothing
+    else
+        return _st_call(st, val, xs)
+    end
+end
+
 function (st::SequenceTemplate{T})(val::Val, xs::AbstractArray) where T
     if isnestedconcretetype(typeof(xs))
-        ET = Core.Compiler.return_type(st, Tuple{typeof(val), eltype(xs)})
-        RT = Array{ET, ndims(xs)}
-        y = RT(undef, size(xs))
-        map!(st(val), y, xs)
-        return y
+        return _st_nested(st, val, xs)
     end
     aoa, aov = allany(Base.Fix2(isa, AbstractArray), xs)
     if aoa
@@ -760,7 +788,18 @@ function (st::SequenceTemplate{T})(val::Val, xs::AbstractArray) where T
             return apply_template(st, val, xs)
         elseif all(Base.Fix1(all, Base.Fix2(isa, AbstractArray)), xs) # dynamic multiple sample
             # xs is an array of array of array
-            return map(st(val), xs)
+            # return map(st(val), xs)
+            if val == Val(0)
+                outputs = map(st(Val(1)), xs)
+                type_ids = map(st(Val(2)), xs)
+                return outputs, type_ids
+            elseif val == Val(-1)
+                foreach(st(Val(-1)), xs)
+                return nothing
+            else
+                return map(st(val), xs)
+            end
+            # return _st_nested(st, val, xs)
         else
             throw(MethodError(st, xs))
         end

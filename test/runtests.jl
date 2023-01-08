@@ -719,11 +719,11 @@ end
             x = collect(1:5)
             head_tail_template = SequenceTemplate(ConstTerm(-1), InputTerm{Int}(), ConstTerm(-2))
             @test head_tail_template(x)[1] == with_head_tail(x, -1, -2)
-            @test nestedcall(x->x[1], head_tail_template(AbstractVector[[x], [1:5], [2:3]])) ==
+            @test head_tail_template(AbstractVector[[x], [1:5], [2:3]])[1] ==
                 map(x->x[1], with_head_tail(AbstractVector[[x], [1:5], [2:3]], -1, -2))
-            @test nestedcall(x->x[1], head_tail_template(Any[Any[x], [1:5], [2:3]])) ==
+            @test head_tail_template(Any[Any[x], [1:5], [2:3]])[1] ==
                 map(x->x[1], with_head_tail(Any[Any[x], [1:5], [2:3]], -1, -2))
-            @test nestedcall(x->x[1], head_tail_template(Any[Any[Any[0,1,2]]])) ==
+            @test head_tail_template(Any[Any[Any[0,1,2]]])[1] ==
                 with_head_tail(Any[Any[Any[0,1,2]]], -1, -2)[1]
             @test_throws MethodError head_tail_template(Any[Any[x], 1:5, 2:3])
             @test_throws Exception head_tail_template(Any[1:5, 2:3])
@@ -740,13 +740,18 @@ end
             @test bert_template(Val(1), ["A"], ["B"]) == ["[CLS]", "A", "[SEP]", "B", "[SEP]"]
             @test bert_template(Val(2), [["A"], ["B"]]) == [1,1,1,2,2]
             @test bert_template(Val(-1), Any["A"]) == nothing
-            @test bert_template([[["A"], ["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
+            @test bert_template([[["A"], ["B"]]]) == ([["[CLS]", "A", "[SEP]", "B", "[SEP]"]], [[1,1,1,2,2]])
+            @test bert_template([[[["A"], ["B"]]]]) == ([[["[CLS]", "A", "[SEP]", "B", "[SEP]"]]], [[[1,1,1,2,2]]])
             @test bert_template(Val(1), [[["A"], ["B"]]]) == [["[CLS]", "A", "[SEP]", "B", "[SEP]"]]
             @test bert_template(Val(2), [[["A"], ["B"]]]) == [[1,1,1,2,2]]
-            @test bert_template(Any[[["A"], ["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
-            @test bert_template([Any[["A"], ["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
-            @test bert_template([Any[Any["A"], Any["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
-            @test bert_template(Any[Any[Any["A"], Any["B"]]]) == [(["[CLS]", "A", "[SEP]", "B", "[SEP]"], [1,1,1,2,2])]
+            @test bert_template(Val(-1), [[[["A"], ["B"]]]]) == nothing
+            @test bert_template(Any[[["A"], ["B"]]]) == ([["[CLS]", "A", "[SEP]", "B", "[SEP]"]], [[1,1,1,2,2]])
+            @test bert_template([Any[["A"], ["B"]]]) == ([["[CLS]", "A", "[SEP]", "B", "[SEP]"]], [[1,1,1,2,2]])
+            @test bert_template([Any[Any["A"], Any["B"]]]) == ([["[CLS]", "A", "[SEP]", "B", "[SEP]"]], [[1,1,1,2,2]])
+            @test bert_template(Any[Any[Any["A"], Any["B"]]]) == ([["[CLS]", "A", "[SEP]", "B", "[SEP]"]], [[1,1,1,2,2]])
+            @test bert_template([Any[Any[Any["A"], Any["B"]]]]) ==
+                ([[["[CLS]", "A", "[SEP]", "B", "[SEP]"]]], [[[1,1,1,2,2]]])
+            @test bert_template(Val(-1), [Any[Any[Any["A"], Any["B"]]]]) == nothing
             bert_template2 = SequenceTemplate(
                 ConstTerm("[CLS]", 1), InputTerm{String}(1), ConstTerm("[SEP]", 1),
                 RepeatedTerm(InputTerm{String}(2), ConstTerm("[SEP]", 2); dynamic_type_id = true)
