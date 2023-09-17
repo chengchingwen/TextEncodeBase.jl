@@ -1,4 +1,5 @@
 using TextEncodeBase
+using RustRegex
 using Test
 
 # quick and dirty macro for making @inferred as test case
@@ -13,7 +14,8 @@ end
 
 using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     BaseTokenization, NestedTokenizer, FlatTokenizer,
-    WordTokenization, EachSplitTokenization, EachMatchTokenization,
+    WordTokenization, EachSplitTokenization,
+    EachMatchTokenization, MatchSplitsTokenization,
     IndexedTokenization, MatchTokenization,
     UnicodeNormalizer, CodeNormalizer, CodeUnMap,
     SentenceReplaceNormalizer, WordReplaceNormalizer,
@@ -82,6 +84,18 @@ end
             @test map(getvalue, tkr_m(Sentence("a    b"))) == ["a", "b"]
         end
 
+        @testset "matchsplits tokenizer" begin
+            tkr_a = FlatTokenizer(MatchSplitsTokenization(" "))
+            tkr_b = FlatTokenizer(MatchSplitsTokenization(","))
+            @test join(map(getvalue, tkr_a(sentence))) == sentence.x
+            @test map(getvalue, tkr_b(Sentence("a, b, c,d"))) == ["a", ",", " b", ",", " c", ",", "d"]
+
+            x = Sentence("a,, b, c,d")
+            tkr_c = FlatTokenizer(MatchSplitsTokenization([rure",,", rure", "]))
+            @test join(map(getvalue, tkr_c(x))) == x.x
+            @test map(getvalue, tkr_c(x)) == ["a", ",,", " b", ", ", "c,d"]
+        end
+
         @testset "index tokenizer" begin
             tkr = FlatTokenizer(IndexedTokenization())
             @test tkr(document) == begin
@@ -107,19 +121,26 @@ end
         end
 
         @testset "match tokenizer" begin
-            tkr = FlatTokenizer(MatchTokenization([r"\d", r"en"]))
-            @test map(getvalue, tkr(document)) == [
-                "This", "is", "the", "first", "s",
-                "en", "t", "en", "ce", ".", "And",
-                "the", "second", "one", "with", "some",
-                "number", "1", "2", "3", "4", "5", ".",
-            ]
-            @test map(getvalue, tkr(sentence)) == [
-                "A", "single", "s", "en", "t", "en",
-                "ce", "with", "3", "1", "char", ".",
-            ]
-            @test map(getvalue, tkr(word)) == [word.x]
-            @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
+            for pats in (
+                [r"\d", r"en"],
+                [rure"\d", rure"en"],
+                [r"\d", rure"en"],
+                [rure"\d", r"en"],
+            )
+                tkr = FlatTokenizer(MatchTokenization(pats))
+                @test map(getvalue, tkr(document)) == [
+                    "This", "is", "the", "first", "s",
+                    "en", "t", "en", "ce", ".", "And",
+                    "the", "second", "one", "with", "some",
+                    "number", "1", "2", "3", "4", "5", ".",
+                ]
+                @test map(getvalue, tkr(sentence)) == [
+                    "A", "single", "s", "en", "t", "en",
+                    "ce", "with", "3", "1", "char", ".",
+                ]
+                @test map(getvalue, tkr(word)) == [word.x]
+                @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
+            end
         end
 
         @testset "unicode normalizer" begin
@@ -169,62 +190,78 @@ end
         end
 
         @testset "match unicode normalized tokenizer" begin
-            tkr = FlatTokenizer(MatchTokenization(UnicodeNormalizer(; casefold = true), ["This", "A", "en", r"\d"]))
-            @test map(getvalue, tkr(document)) == [
-                "This", "is", "the", "first", "s",
-                "en", "t", "en", "ce", ".", "A", "nd",
-                "the", "second", "one", "with", "some",
-                "number", "1", "2", "3", "4", "5", ".",
-            ]
-            @test map(getvalue, tkr(sentence)) == [
-                "A", "single", "s", "en", "t", "en",
-                "ce", "with", "3", "1", "char", ".",
-            ]
-            @test map(getvalue, tkr(word)) == [word.x]
-            @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
+            for pats in (
+                ["This", "A", "en", r"\d"],
+                ["This", "A", "en", rure"\d"],
+            )
+                tkr = FlatTokenizer(MatchTokenization(UnicodeNormalizer(; casefold = true), pats))
+                @test map(getvalue, tkr(document)) == [
+                    "This", "is", "the", "first", "s",
+                    "en", "t", "en", "ce", ".", "A", "nd",
+                    "the", "second", "one", "with", "some",
+                    "number", "1", "2", "3", "4", "5", ".",
+                ]
+                @test map(getvalue, tkr(sentence)) == [
+                    "A", "single", "s", "en", "t", "en",
+                    "ce", "with", "3", "1", "char", ".",
+                ]
+                @test map(getvalue, tkr(word)) == [word.x]
+                @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
+            end
         end
 
         @testset "match code normalized tokenizer" begin
-            tkr = FlatTokenizer(MatchTokenization(CodeNormalizer('a':'z'=>'A':'Z', 'A':'Z'=>'a':'z'), ["This", "A", "en", r"\d"]))
-            @test map(getvalue, tkr(document)) == [
-                "This", "IS", "THE", "FIRST", "S",
-                "en", "T", "en", "CE", ".", "A", "ND",
-                "THE", "SECOND", "ONE", "WITH", "SOME",
-                "NUMBER", "1", "2", "3", "4", "5", ".",
-            ]
-            @test map(getvalue, tkr(sentence)) == [
-                "A", "SINGLE", "S", "en", "T", "en",
-                "CE", "WITH", "3", "1", "CHAR", ".",
-            ]
-            @test map(getvalue, tkr(word)) == ["WORD"]
-            @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
+            for pats in (
+                ["This", "A", "en", r"\d"],
+                ["This", "A", "en", rure"\d"],
+            )
+                tkr = FlatTokenizer(MatchTokenization(CodeNormalizer('a':'z'=>'A':'Z', 'A':'Z'=>'a':'z'), pats))
+                @test map(getvalue, tkr(document)) == [
+                    "This", "IS", "THE", "FIRST", "S",
+                    "en", "T", "en", "CE", ".", "A", "ND",
+                    "THE", "SECOND", "ONE", "WITH", "SOME",
+                    "NUMBER", "1", "2", "3", "4", "5", ".",
+                ]
+                @test map(getvalue, tkr(sentence)) == [
+                    "A", "SINGLE", "S", "en", "T", "en",
+                    "CE", "WITH", "3", "1", "CHAR", ".",
+                ]
+                @test map(getvalue, tkr(word)) == ["WORD"]
+                @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
+            end
         end
 
         @testset "indexed match tokenizer" begin
-            tkr = FlatTokenizer(IndexedTokenization(MatchTokenization([r"\d", r"en"])))
-            @test map(getvalue, tkr(document)) == [
-                "This", "is", "the", "first", "s",
-                "en", "t", "en", "ce", ".", "And",
-                "the", "second", "one", "with", "some",
-                "number", "1", "2", "3", "4", "5", ".",
-            ]
-            @test map(getmeta, tkr(document)) == begin
-                m = [false, false, false, false, false, true, false, true, false, false, false,
-                     false, false, false, false, false, false, true, true, true, true, true, false]
-                s = Iterators.flatten((Iterators.repeated(1, 10), Iterators.repeated(2, 13)))
-                w = Iterators.flatten((1:10, 1:13))
-                map(NamedTuple{(:sentence_id, :ismatch, :word_id, :token_id)}, zip(s, m, w, w))
+            for pats in (
+                [r"\d", r"en"],
+                [rure"\d", r"en"],
+                [rure"\d", rure"en"],
+            )
+                tkr = FlatTokenizer(IndexedTokenization(MatchTokenization(pats)))
+                @test map(getvalue, tkr(document)) == [
+                    "This", "is", "the", "first", "s",
+                    "en", "t", "en", "ce", ".", "And",
+                    "the", "second", "one", "with", "some",
+                    "number", "1", "2", "3", "4", "5", ".",
+                ]
+                @test map(getmeta, tkr(document)) == begin
+                    m = [false, false, false, false, false, true, false, true, false, false, false,
+                         false, false, false, false, false, false, true, true, true, true, true, false]
+                    s = Iterators.flatten((Iterators.repeated(1, 10), Iterators.repeated(2, 13)))
+                    w = Iterators.flatten((1:10, 1:13))
+                    map(NamedTuple{(:sentence_id, :ismatch, :word_id, :token_id)}, zip(s, m, w, w))
+                end
+                @test map(getvalue, tkr(sentence)) == [
+                    "A", "single", "s", "en", "t", "en",
+                    "ce", "with", "3", "1", "char", ".",
+                ]
+                sentence_match = [false, false, false, true, false, true, false, false, true, true, false, false]
+                @test map(getmeta, tkr(sentence)) == map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip(sentence_match, 1:12, 1:12))
+                @test map(getvalue, tkr(word)) == [word.x]
+                @test map(getmeta, tkr(word)) == [(ismatch = false, word_id = 1, token_id = 1)]
+                @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
+                @test map(getmeta, tkr(Word("123"))) == map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip([true, true, true], 1:3, 1:3))
             end
-            @test map(getvalue, tkr(sentence)) == [
-                "A", "single", "s", "en", "t", "en",
-                "ce", "with", "3", "1", "char", ".",
-            ]
-            sentence_match = [false, false, false, true, false, true, false, false, true, true, false, false]
-            @test map(getmeta, tkr(sentence)) == map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip(sentence_match, 1:12, 1:12))
-            @test map(getvalue, tkr(word)) == [word.x]
-            @test map(getmeta, tkr(word)) == [(ismatch = false, word_id = 1, token_id = 1)]
-            @test map(getvalue, tkr(Word("123"))) == ["1", "2", "3"]
-            @test map(getmeta, tkr(Word("123"))) == map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip([true, true, true], 1:3, 1:3))
         end
 
         @testset "nested output" begin
@@ -288,52 +325,58 @@ end
         end
 
         @testset "nested indexed match char" begin
-            tkr = NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk(), [r"\d", r"en"])))
-            s(x) = split(x, "")
-            r(x, n) = repeat(x:x, n)
-            @test nestedcall(getvalue, tkr(document)) == [
-                [
-                    s("This"); s("is"); s("the"); s("first");
-                    "s"; "en"; "t"; "en"; s("ce"); ".";
-                ],
-                [
-                    s("And"); s("the"); s("second"); s("one"); s("with");
-                    s("some"); s("number"); "1"; "2"; "3"; "4"; "5"; ".";
+            for pats in (
+                [r"\d", r"en"],
+                [rure"\d", r"en"],
+                [rure"\d", rure"en"],
+            )
+                tkr = NestedTokenizer(IndexedTokenization(MatchTokenization(CharTk(), pats)))
+                s(x) = split(x, "")
+                r(x, n) = repeat(x:x, n)
+                @test nestedcall(getvalue, tkr(document)) == [
+                    [
+                        s("This"); s("is"); s("the"); s("first");
+                        "s"; "en"; "t"; "en"; s("ce"); ".";
+                    ],
+                    [
+                        s("And"); s("the"); s("second"); s("one"); s("with");
+                        s("some"); s("number"); "1"; "2"; "3"; "4"; "5"; ".";
+                    ]
                 ]
-            ]
-            @test nestedcall(getmeta, tkr(document)) == begin
-                ismatch = [
-                    [r(false, 15); true; false; true; r(false, 3);],
-                    [r(false, 29); r(true, 5); false;],
-                ]
-                sentence_id = [r(1, 21), r(2, 35)]
-                word_id = [[
+                @test nestedcall(getmeta, tkr(document)) == begin
+                    ismatch = [
+                        [r(false, 15); true; false; true; r(false, 3);],
+                        [r(false, 29); r(true, 5); false;],
+                    ]
+                    sentence_id = [r(1, 21), r(2, 35)]
+                    word_id = [[
                         r(1, 4); r(2, 2); r(3, 3); r(4, 5);
                         5; 6; 7; 8; r(9, 2); 10;
                     ], [
                         r(1, 3); r(2, 3); r(3, 6); r(4, 3); r(5, 4);
                         r(6, 4); r(7, 6); 8; 9; 10; 11; 12; 13;
                     ]]
-                token_id = [[1:21;], [1:35;]]
-                map((s,m,w,t)->map(NamedTuple{(:sentence_id, :ismatch, :word_id, :token_id)}, zip(s,m,w,t)), sentence_id, ismatch, word_id, token_id)
-            end
-            @test nestedcall(getvalue, tkr(sentence)) == [
-                [
-                    "A"; s("single"); "s"; "en"; "t"; "en";
-                    s("ce"); s("with"); "3"; "1"; s("char"); ".";
+                    token_id = [[1:21;], [1:35;]]
+                    map((s,m,w,t)->map(NamedTuple{(:sentence_id, :ismatch, :word_id, :token_id)}, zip(s,m,w,t)), sentence_id, ismatch, word_id, token_id)
+                end
+                @test nestedcall(getvalue, tkr(sentence)) == [
+                    [
+                        "A"; s("single"); "s"; "en"; "t"; "en";
+                        s("ce"); s("with"); "3"; "1"; s("char"); ".";
+                    ]
                 ]
-            ]
-            @test nestedcall(getmeta, tkr(sentence)) == begin
-                ismatch = [r(false, 8); true; false; true; r(false, 6); r(true, 2); r(false, 5);]
-                word_id = [
-                    1; r(2, 6); 3; 4; 5; 6;
-                    r(7, 2); r(8, 4); 9; 10; r(11, 4); 12;
-                ]
-                token_id = [1:24;]
-                [map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip(ismatch, word_id, token_id))]
+                @test nestedcall(getmeta, tkr(sentence)) == begin
+                    ismatch = [r(false, 8); true; false; true; r(false, 6); r(true, 2); r(false, 5);]
+                    word_id = [
+                        1; r(2, 6); 3; 4; 5; 6;
+                        r(7, 2); r(8, 4); 9; 10; r(11, 4); 12;
+                    ]
+                    token_id = [1:24;]
+                    [map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip(ismatch, word_id, token_id))]
+                end
+                @test nestedcall(getvalue, tkr(word)) == ["w", "o", "r", "d"]
+                @test nestedcall(getmeta, tkr(word)) == map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip(r(false, 4), r(1, 4), 1:4))
             end
-            @test nestedcall(getvalue, tkr(word)) == ["w", "o", "r", "d"]
-            @test nestedcall(getmeta, tkr(word)) == map(NamedTuple{(:ismatch, :word_id, :token_id)}, zip(r(false, 4), r(1, 4), 1:4))
         end
 
         @testset "@stage" begin

@@ -34,6 +34,7 @@ export AbstractTextEncoder, TextEncoder, encode, decode, encode_indices
 
 include("./encode.jl")
 
-
+# utils
+export matchsplits
 
 end
