@@ -1,7 +1,7 @@
 name = "TextEncodeBase"
 uuid = "f92c20c0-9f2a-4705-8116-881385faba05"
 authors = ["chengchingwen <adgjl5645@hotmail.com> and contributors"]
-version = "0.6.0"
+version = "0.7.0"
 
 [deps]
 FuncPipelines = "9ed96fbb-10b6-44d4-99a6-7e2a3dc8861b"
