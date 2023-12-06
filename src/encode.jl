@@ -1,3 +1,5 @@
+using StructWalk
+
 abstract type AbstractTextEncoder end
 
 """
@@ -79,3 +81,7 @@ Given an encoder, return a new encoder that has the same tokenizer and vocabular
  a function that take a encoder and return a new processing function.
 """
 TextEncoder(builder, e::TextEncoder) = TextEncoder(e.tokenizer, e.vocab, builder(e))
+
+
+StructWalk.children(::TokenizerStyle, x::AbstractTextEncoder) = StructWalk.children(WalkStyle, x)
+StructWalk.iscontainer(::TokenizerStyle, x::AbstractTextEncoder) = false
