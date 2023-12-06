@@ -937,20 +937,38 @@ julia> TextEncodeBase.join_text(["a" "d"; "b" "e"; "c" "f";;; "x" "u"; "y" "v"; 
 
 ```
 """
-function join_text(x::AbstractArray, delim = "", last = delim)
-    stype = peek_sequence_sample_type(x)
-    if stype == SingleSample
-        N = ndims(x)
-        if N == 1
-            return join(x, delim, last)
+@static if VERSION < v"1.9"
+    function join_text(x::AbstractArray, delim = "", last = delim)
+        stype = peek_sequence_sample_type(x)
+        if stype == SingleSample
+            N = ndims(x)
+            if N == 1
+                return join(x, delim, last)
+            else
+                return reshape(mapslice(FixRest(join, delim, last), x; dims = 1), Base.tail(size(x)))
+            end
+        elseif stype >= UnknownSample
+            return @elementmap x join_text(x, delim, last)
         else
-            return map(FixRest(join, delim, last), eachslice(x, dims = ntuple(x->x+1, Val(N - 1))))
+            error("Input array is mixing array and non-array elements")
         end
-    elseif stype >= UnknownSample
-        return @elementmap x join_text(x, delim, last)
-        # return map(FixRest(join_text, delim, last), x)
-    else
-        error("Input array is mixing array and non-array elements")
+    end
+else
+    function join_text(x::AbstractArray, delim = "", last = delim)
+        stype = peek_sequence_sample_type(x)
+        if stype == SingleSample
+            N = ndims(x)
+            if N == 1
+                return join(x, delim, last)
+            else
+                return map(FixRest(join, delim, last), eachslice(x, dims = ntuple(x->x+1, Val(N - 1))))
+            end
+        elseif stype >= UnknownSample
+            return @elementmap x join_text(x, delim, last)
+            # return map(FixRest(join_text, delim, last), x)
+        else
+            error("Input array is mixing array and non-array elements")
+        end
     end
 end
 
