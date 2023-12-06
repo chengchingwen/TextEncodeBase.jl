@@ -25,16 +25,23 @@ Use encoder's processing function to process `x`.
 process(e::AbstractTextEncoder, x) = process(e)(x)
 
 """
+    onehot_encode(e::AbstractTextEncoder, x)
+
+Lookup `x` in encoder's vocabulary. Return one-hot encoded vectors.
+"""
+onehot_encode(e::AbstractTextEncoder, x) = lookup(OneHot, e.vocab, x)
+
+"""
     lookup(e::AbstractTextEncoder, x)
 
-Lookup `x` in encoder's vocabulary.
+Lookup `x`. This is basically [`onehot_encode`](@ref) but can be overloaded for extra processing.
 """
-lookup(e::AbstractTextEncoder, x) = lookup(OneHot, e.vocab, x)
+lookup(e::AbstractTextEncoder, x) = onehot_encode(e, x)
 
 """
     encode_indices(e::AbstractTextEncoder, x)
 
-Encode `x` without calling `lookup` bound with `e`.
+Encode for indices. Encode `x` without calling `lookup` bound with `e`.
 """
 encode_indices(e::AbstractTextEncoder, x) = process(e, tokenize(e, x))
 
@@ -48,16 +55,24 @@ encode(e::AbstractTextEncoder, x) = lookup(e, encode_indices(e, x))
 """
     decode_indices(e::AbstractTextEncoder, x)
 
-Decode `x` by reverse lookup `x` in `e.vocab`.
+Decode from indices. Decode `x` by reverse lookup `x` in `e.vocab`.
 """
 decode_indices(e::AbstractTextEncoder, x) = lookup(eltype(e.vocab), e.vocab, x)
 
 """
     decode(e::AbstractTextEncoder, x)
 
-Decode `x`. This is basically [`decode_indices`](@ref) but can be overload for post-processing.
+Decode `x`. This is basically [`decode_indices`](@ref) but can be overloaded for post-processing.
 """
 decode(e::AbstractTextEncoder, x) = decode_indices(e, x)
+
+"""
+    decode_text(e::AbstractTextEncoder, x)
+
+Decode `x` into texts. This is basically [`join_text`](@ref) with [`decode`](@ref) but can be overloaded
+ for post-processing.
+"""
+decode_text(e::AbstractTextEncoder, x) = join_text(decode(e, x))
 
 """
     TextEncoder(tokenizer, vocab, process = nestedcall(getvalue))

@@ -30,7 +30,7 @@ using FuncPipelines
 export Pipeline, Pipelines, PipeGet
 
 # encode
-export AbstractTextEncoder, TextEncoder, encode, decode, encode_indices
+export AbstractTextEncoder, TextEncoder, encode, decode, encode_indices, decode_indices, onehot_encode, decode_text
 
 include("./encode.jl")
 
