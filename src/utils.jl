@@ -945,7 +945,7 @@ julia> TextEncodeBase.join_text(["a" "d"; "b" "e"; "c" "f";;; "x" "u"; "y" "v"; 
             if N == 1
                 return join(x, delim, last)
             else
-                return reshape(mapslice(FixRest(join, delim, last), x; dims = 1), Base.tail(size(x)))
+                return reshape(mapslices(FixRest(join, delim, last), x; dims = 1), Base.tail(size(x)))
             end
         elseif stype >= UnknownSample
             return @elementmap x join_text(x, delim, last)
