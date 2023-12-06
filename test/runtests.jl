@@ -718,7 +718,11 @@ end
             @test join_text(["a", "b", "c"]) == "abc"
             @test join_text([["a", "b", "c"]]) == ["abc"]
             @test join_text([[["a", "b", "c"]]]) == [["abc"]]
-            x = ["a" "d"; "b" "e"; "c" "f";;; "x" "u"; "y" "v"; "z" "w"; ]
+            @static if VERSION < v"1.8"
+                x = cat(["a" "d"; "b" "e"; "c" "f"], ["x" "u"; "y" "v"; "z" "w"; ]; dims=3)
+            else
+                x = ["a" "d"; "b" "e"; "c" "f";;; "x" "u"; "y" "v"; "z" "w"; ]
+            end
             @test join_text(x, " + ", " = ") == ["a + b = c" "x + y = z"; "d + e = f" "u + v = w"]
             @test join_text(x, " + ") == ["a + b + c" "x + y + z"; "d + e + f" "u + v + w"]
             @test join_text(x) == ["abc" "xyz"; "def" "uvw"]

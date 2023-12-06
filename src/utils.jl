@@ -885,15 +885,28 @@ function batch2nested(x::AbstractArray)
 end
 
 _batch2nested(x, ::Tuple{Int}) = collect(x)
-function _batch2nested(x, s::Tuple)
-    dim = length(s)
-    len = s[end]
-    s = Base.front(s)
-    X = eachslice(x; dims = dim)
-    y = Vector{Core.Compiler.return_type(_batch2nested, Tuple{eltype(X), typeof(s)})}(undef, len)
-    return map!(xi->_batch2nested(xi, s), y, X)
+@static if VERSION < v"1.9"
+    function _batch2nested(x, s::Tuple)
+        dim = length(s)
+        len = s[end]
+        s = Base.front(s)
+        X = eachslice(x; dims = dim)
+        y = Vector{Core.Compiler.return_type(_batch2nested, Tuple{eltype(X), typeof(s)})}(undef, len)
+        @inbounds for (i, xi) in enumerate(X)
+            y[i] = _batch2nested(xi, s)
+        end
+        return y
+    end
+else
+    function _batch2nested(x, s::Tuple)
+        dim = length(s)
+        len = s[end]
+        s = Base.front(s)
+        X = eachslice(x; dims = dim)
+        y = Vector{Core.Compiler.return_type(_batch2nested, Tuple{eltype(X), typeof(s)})}(undef, len)
+        return map!(xi->_batch2nested(xi, s), y, X)
+    end
 end
-
 
 """
     join_text(x::AbstractArray [, delim [, last]])
