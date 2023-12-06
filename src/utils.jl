@@ -314,8 +314,265 @@ end
 
 # encode utils
 
+const NotASample = -2
+const UnknownSample = -1
+const SampleElement = 0
+const SingleSample = 1
+const ArraySample = 2
+const NestedSample = 3
+
+_sequence_of(x) = x + (x >= 0)
+
+"""
+    type_sequence_sample_type([T::Type,] t::Type)
+
+Get the depth of the nested array type. If return natural number, `t` is a type of nested array.
+ Return `-1` if it cannot be known by type and return `-2` if `t` is not a nested array type.
+ Specify `T` to check if `t` is a nested array type with element type `T`.
+ If `T` is not specified, every type not subtype to `AbstractArray` is a count as element type.
+
+see also: [`sequence_sample_type`](@ref), [`peek_sequence_sample_type`](@ref)
+
+# Example
+
+```julia-repl
+julia> type_sequence_sample_type(Vector{Vector{Integer}})
+2
+
+julia> type_sequence_sample_type(Number, Array{Vector{Union{Float64, Int}}})
+2
+
+julia> type_sequence_sample_type(Int, Array{Vector{Union{Float64, Int}}})
+-2
+
+```
+"""
+function type_sequence_sample_type(@nospecialize(T::Type), @nospecialize(t::Type))
+    t <: T && return SampleElement
+    if t isa Union
+        st_a = type_sequence_sample_type(T, t.a)
+        st_b = type_sequence_sample_type(T, t.b)
+        return st_a == st_b ? st_a : NotASample
+    end
+    t <: AbstractArray || return NotASample
+    et = t >: AbstractArray ? Base.unwrap_unionall(t).parameters[1] : eltype(t)
+    if et isa DataType || et isa UnionAll
+        if et <: T
+            return SingleSample
+        elseif et <: AbstractArray
+            st = type_sequence_sample_type(T, et)
+            return _sequence_of(st)
+        elseif et >: AbstractArray
+            return UnknownSample
+        else
+            return NotASample
+        end
+    elseif et isa Union
+        st = type_sequence_sample_type(T, et)
+        return _sequence_of(st)
+    end
+    return UnknownSample
+end
+function type_sequence_sample_type(@nospecialize(t::Type))
+    if t isa Union
+        st_a = type_sequence_sample_type(t.a)
+        st_b = type_sequence_sample_type(t.b)
+        return st_a == st_b ? st_a : NotASample
+    end
+    t <: AbstractArray || return SampleElement
+    et = t >: AbstractArray ? Base.unwrap_unionall(t).parameters[1] : eltype(t)
+    if et isa DataType || et isa UnionAll
+        if et <: AbstractArray
+            st = type_sequence_sample_type(et)
+            return _sequence_of(st)
+        elseif et >: AbstractArray
+            return UnknownSample
+        else
+            return SingleSample
+        end
+    elseif et isa Union
+        st = type_sequence_sample_type(et)
+        return _sequence_of(st)
+    end
+    return UnknownSample
+end
+
+"""
+    sequence_sample_type([T::Type,] x)
+
+Get the depth of the nested array. If return natural number, `x` is a nested array where each element has the same depth.
+ Return `-2` if `x` is not a nested array or the depth of elements are different. Depth of empty array compute with the
+ type and `sequence_sample_type(Any[])` is `1`. Specify `T` to check if `x` is a nested array with element type `T`.
+ If `T` is not specified, every type not subtype to `AbstractArray` is a count as element type.
+
+see also: [`type_sequence_sample_type`](@ref), [`peek_sequence_sample_type`](@ref)
+
+# Example
+
+```julia-repl
+julia> sequence_sample_type([[1,2,3]])
+2
+
+julia> sequence_sample_type([[[2,3], [1]], Vector{Int}[]])
+3
+
+julia> sequence_sample_type([[[2,3], [1]], Any[]])
+-2
+
+julia> sequence_sample_type(Int, [[1,2], 3])
+-2
+
+julia> sequence_sample_type(Int, Any[[1,2], Int[]])
+2
+
+```
+"""
+function sequence_sample_type(x)
+    S = typeof(x)
+    stype = type_sequence_sample_type(S)
+    if stype == UnknownSample
+        itr = iterate(x)
+        if !isnothing(itr)
+            xi, state = itr
+            elst = sequence_sample_type(xi)
+            elst == NotASample && return NotASample
+            itr = iterate(x, state)
+            while !isnothing(itr)
+                xi, state = itr
+                elst2 = sequence_sample_type(xi)
+                elst != elst2 && return NotASample
+                itr = iterate(x, state)
+            end
+            return _sequence_of(elst)
+        end
+        ET = eltype(S)
+        return ET <: AbstractArray || ET != Any ? ArraySample : SingleSample
+    end
+    return stype
+end
+function sequence_sample_type(T::Type, x)
+    S = typeof(x)
+    stype = type_sequence_sample_type(T, S)
+    if stype == UnknownSample
+        itr = iterate(x)
+        if !isnothing(itr)
+            xi, state = itr
+            elst = sequence_sample_type(T, xi)
+            elst == NotASample && return NotASample
+            itr = iterate(x, state)
+            while !isnothing(itr)
+                xi, state = itr
+                elst2 = sequence_sample_type(T, xi)
+                elst != elst2 && return NotASample
+                itr = iterate(x, state)
+            end
+            return _sequence_of(elst)
+        end
+        ET = eltype(S)
+        return ET <: AbstractArray || ET != Any ? ArraySample : SingleSample
+    end
+    return stype
+end
+
+"""
+    peek_sequence_sample_type([T::Type,] x)
+
+Non-recursive version of `sequence_sample_type`. Return `-1` if the `x` is an array of array with unknown elements,
+ thus it's possible that `sequence_sample_type(x[i]) == -2`. Specify `T` to check if `x` is a nested array with
+ element type `T`. If `T` is not specified, every type not subtype to `AbstractArray` is a count as element type.
+
+see also: [`type_sequence_sample_type`](@ref), [`sequence_sample_type`](@ref)
+
+# Example
+
+```julia-repl
+julia> TextEncodeBase.peek_sequence_sample_type([1,2,3])
+1
+
+julia> peek_sequence_sample_type(Int, Any[[[1,2,3]]]), sequence_sample_type(Int, Any[[[1,2,3]]])
+(-1, 3)
+
+julia> peek_sequence_sample_type(Int, [[[1,2,3], "abc"]]), sequence_sample_type(Int, [[[1,2,3], "abc"]])
+(-1, -2)
+
+```
+"""
+function peek_sequence_sample_type(x)
+    S = typeof(x)
+    stype = type_sequence_sample_type(S)
+    if stype == UnknownSample
+        itr = iterate(x)
+        if !isnothing(itr)
+            xi, state = itr
+            elst = xi isa AbstractArray ? SingleSample : SampleElement
+            itr = iterate(x, state)
+            while !isnothing(itr)
+                xi, state = itr
+                elst2 = xi isa AbstractArray ? SingleSample : SampleElement
+                elst != elst2 && return NotASample
+                itr = iterate(x, state)
+            end
+            return elst == SampleElement ? SingleSample : UnknownSample
+        end
+        ET = eltype(S)
+        return ET <: AbstractArray || ET != Any ? ArraySample : SingleSample
+    end
+    return stype
+end
+function peek_sequence_sample_type(T::Type, x)
+    S = typeof(x)
+    stype = type_sequence_sample_type(T, S)
+    if stype == UnknownSample
+        itr = iterate(x)
+        if !isnothing(itr)
+            xi, state = itr
+            elst = xi isa AbstractArray ? SingleSample : xi isa T ? SampleElement : NotASample
+            elst == NotASample && return NotASample
+            itr = iterate(x, state)
+            while !isnothing(itr)
+                xi, state = itr
+                elst2 = xi isa AbstractArray ? SingleSample : xi isa T ? SampleElement : NotASample
+                elst != elst2 && return NotASample
+                itr = iterate(x, state)
+            end
+            return elst == SampleElement ? SingleSample : UnknownSample
+        end
+        ET = eltype(S)
+        return ET <: AbstractArray || ET != Any ? ArraySample : SingleSample
+    end
+    return stype
+end
+
+
+macro elementmap(sym::Symbol, ex::Expr)
+    !Meta.isexpr(ex, :call) && error("not a function call: $ex")
+    func = ex.args[1]
+    has_x = false
+    argtype = Expr(:curly, :Tuple)
+    x_i = Symbol("#", sym, :_i)
+    fcall = Expr(:call, func)
+    for i = 2:length(ex.args)
+        argi = ex.args[i]
+        if argi == sym
+            has_x = true
+            push!(argtype.args, :(eltype($argi)))
+            push!(fcall.args, x_i)
+        else
+            push!(argtype.args, :(typeof($argi)))
+            push!(fcall.args, argi)
+        end
+    end
+    !has_x && error("no $sym in function call")
+    f = Expr(:->, x_i, Expr(:block, fcall))
+    ET = Expr(:call, :(Core.Compiler.return_type), func, argtype)
+    RT = Expr(:curly, Array, ET, Expr(:call, :ndims, sym))
+    y = Expr(:call, RT, :undef, Expr(:call, :size, sym))
+    r = Expr(:call, :map!, f, y, sym)
+    return esc(r)
+end
+
 allany(f, x) = mapfoldl(f, _allany, x; init=(true, false))
-_allany(a, b) = a[1] & b, a[2] | !b
+_allany(a, b) = a[1] & b, a[2] | b
 
 """
     with_head_tail(x, head, tail)
@@ -342,15 +599,18 @@ julia> TextEncodeBase.with_head_tail([1:5, 2:3], -1, -2)
 
 ```
 """
-with_head_tail(x::AbstractArray, head, tail) = _with_head_tail(x, head, tail)
-with_head_tail(x::AbstractArray{<:AbstractVector}, head, tail) = map(with_head_tail(head, tail), x)
-function with_head_tail(x::AbstractArray{>:AbstractArray}, head, tail)
-    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
-    if aoa
-        map(with_head_tail(head, tail), x)
-    elseif aov
-        T = mapreduce(typeof, promote_type, x)
-        _with_head_tail(T, x, head, tail)
+function with_head_tail(x::AbstractArray, head, tail)
+    stype = peek_sequence_sample_type(x)
+    if stype == SingleSample
+        T = eltype(x)
+        if T == Any
+            return _with_head_tail(mapreduce(typeof, promote_type, x), x, head, tail)
+        else
+            return _with_head_tail(x, head, tail)
+        end
+    elseif stype >= UnknownSample
+        return @elementmap x with_head_tail(x, head, tail)
+        # return map(FixRest(with_head_tail, head, tail), x)
     else
         error("Input array is mixing array and non-array elements")
     end
@@ -417,24 +677,13 @@ julia> TextEncodeBase.trunc_or_pad([1:5, [2:7, [1:2]]], nothing, -1)
 
 ```
 """
-trunc_or_pad(x::AbstractArray, n::Integer, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
-    trunc_or_pad!(similar(x, n), x, n, pad, trunc_end, pad_end)
-function trunc_or_pad(x::AbstractArray{<:AbstractArray}, n::Integer, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail)
-    ET = Core.Compiler.return_type(trunc_or_pad, Tuple{eltype(x), Int, typeof(pad), Symbol, Symbol})
-    RT = Array{ET, ndims(x)}
-    y = RT(undef, size(x))
-    map!(trunc_or_pad(n, pad, trunc_end, pad_end), y, x)
-    return y
-end
-function trunc_or_pad(
-    x::AbstractArray{>:AbstractArray}, n::Integer, pad,
-    trunc_end::Symbol = :tail, pad_end::Symbol = :tail,
-)
-    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
-    if aoa
-        map(trunc_or_pad(n, pad, trunc_end, pad_end), x)
-    elseif aov
-        trunc_or_pad!(similar(x, n), x, n, pad, trunc_end, pad_end)
+function trunc_or_pad(x::AbstractArray, n::Integer, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail)
+    stype = peek_sequence_sample_type(x)
+    if stype == SingleSample
+        return trunc_or_pad!(similar(x, n), x, n, pad, trunc_end, pad_end)
+    elseif stype >= UnknownSample
+        return @elementmap x trunc_or_pad(x, n, pad, trunc_end, pad_end)
+        # return map(trunc_or_pad(n, pad, trunc_end, pad_end), x)
     else
         error("Input array is mixing array and non-array elements")
     end
@@ -517,7 +766,6 @@ julia> TextEncodeBase.trunc_and_pad([1:5, [2:7, [1:2]]], nothing, -1)
 """
 trunc_and_pad(x, maxn, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
     (n = nestedmaxlength(x); _trunc_and_pad(x, n, isnothing(maxn) ? n : maxn, pad, trunc_end, pad_end))
-
 trunc_and_pad(maxn, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
     FixRest(trunc_and_pad, maxn, pad, trunc_end, pad_end)
 trunc_and_pad(x; maxn=nothing, pad, trunc_end::Symbol = :tail, pad_end::Symbol = :tail) =
@@ -527,51 +775,42 @@ trunc_and_pad(; maxn=nothing, pad, trunc_end::Symbol = :tail, pad_end::Symbol = 
 
 @inline _trunc_and_pad(x, n, maxn, pad, trunc_end, pad_end) = trunc_or_pad(x, min(n, maxn), pad, trunc_end, pad_end)
 
-nestedmaxlength(x::AbstractArray{<:AbstractArray}) = mapfoldl(nestedmaxlength, max, x)
-nestedmaxlength(x::AbstractArray) = length(x)
-function nestedmaxlength(x::AbstractArray{>:AbstractArray})
-    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
-    if aoa
-        mapfoldl(nestedmaxlength, max, x)
-    elseif aov
-        length(x)
+
+function nestedmaxlength(x::AbstractArray)
+    stype = peek_sequence_sample_type(x)
+    if stype == SingleSample
+        return length(x)
+    elseif stype >= UnknownSample
+        return mapfoldl(nestedmaxlength, max, x)
     else
         error("Input array is mixing array and non-array elements")
     end
 end
 
 _checkeqsize(x, y) = x == y ? x : throw(DimensionMismatch("nested size not the same: $x != $y"))
-
-function nestedsize(x::AbstractArray{<:AbstractArray})
-    s1 = nestedsize(first(x))
-    mapfoldl(nestedsize, _checkeqsize, @view(reshape(x, :)[2:end]); init = s1)
-    (s1..., size(x)...)
-end
-nestedsize(x::AbstractArray) = size(x)
-function nestedsize(x::AbstractArray{>:AbstractArray})
-    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
-    if aoa
-        (mapfoldl(nestedsize, _checkeqsize, x)..., size(x)...)
-    elseif aov
-        size(x)
+function nestedsize(x::AbstractArray)
+    stype = peek_sequence_sample_type(x)
+    if stype == SingleSample
+        return size(x)
+    elseif stype >= UnknownSample
+        s1 = nestedsize(first(x))
+        mapfoldl(nestedsize, _checkeqsize, @view(reshape(x, :)[2:end]); init = s1)
+        return (s1..., size(x)...)
     else
         error("Input array is mixing array and non-array elements")
     end
 end
 
-nestedtype(x::AbstractArray{<:AbstractArray}) = mapreduce(nestedtype, promote_type, x)
-nestedtype(x::AbstractArray) = mapreduce(typeof, promote_type, x)
-function nestedtype(x::AbstractArray{>:AbstractArray})
-    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
-    if aoa
-        mapreduce(nestedtype, promote_type, x)
-    elseif aov
-        mapreduce(typeof, promote_type, x)
+function nestedtype(x::AbstractArray)
+    stype = peek_sequence_sample_type(x)
+    if stype == SingleSample
+        return mapreduce(typeof, promote_type, x)
+    elseif stype >= UnknownSample
+        return mapreduce(nestedtype, promote_type, x)
     else
         error("Input array is mixing array and non-array elements")
     end
 end
-
 
 """
     nested2batch(x)
@@ -599,15 +838,13 @@ function nested2batch(x)
 end
 
 _reduce_nested(dst_offset, xi) = dst_offset[1], _nested2batch!(dst_offset..., xi)[2]
-_nested2batch!(arr, offset, x::AbstractArray{<:AbstractArray}) = foldl(_reduce_nested, x; init=(arr, offset))
-_nested2batch!(arr, offset, x::AbstractArray) = (copyto!(arr, offset, x, 1, length(x)); (arr, offset+length(x)))
-function _nested2batch!(arr, offset, x::AbstractArray{>:AbstractArray})
-    aoa, aov = allany(Base.Fix2(isa, AbstractArray), x)
-    if aoa
-        foldl(_reduce_nested, x; init=(arr, offset))
-    elseif aov
+function _nested2batch!(arr, offset, x::AbstractArray)
+    stype = peek_sequence_sample_type(x)
+    if stype == SingleSample
         copyto!(arr, offset, x, 1, length(x))
-        (arr, offset+length(x))
+        return (arr, offset+length(x))
+    elseif stype >= UnknownSample
+        return foldl(_reduce_nested, x; init=(arr, offset))
     else
         error("Input array is mixing array and non-array elements")
     end
@@ -831,11 +1068,7 @@ end
 
 ## deep nested or dynamic
 @inline function _st_call(st::SequenceTemplate, val::Val, xs::AbstractArray)
-    ET = Core.Compiler.return_type(st, Tuple{typeof(val), eltype(xs)})
-    RT = Array{ET, ndims(xs)}
-    y = RT(undef, size(xs))
-    map!(st(val), y, xs)
-    return y
+    return @elementmap xs st(val)(xs)
 end
 
 @inline function _st_nested(st::SequenceTemplate, val::Val, xs::AbstractArray)
@@ -855,7 +1088,8 @@ function (st::SequenceTemplate{T})(val::Val, xs::AbstractArray) where T
     if isnestedconcretetype(typeof(xs))
         return _st_nested(st, val, xs)
     end
-    aoa, aov = allany(Base.Fix2(isa, AbstractArray), xs)
+    aoa, naov = allany(Base.Fix2(isa, AbstractArray), xs)
+    aov = !naov
     if aoa
         if all(Base.Fix1(all, Base.Fix2(isa, T)), xs) # dynamic single sample
             # xs is an array of sequence
