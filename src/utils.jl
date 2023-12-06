@@ -817,6 +817,8 @@ end
 
 convert nested array into single array
 
+See also: [`batch2nested`](@ref)
+
 # Example
 
 ```julia
@@ -849,6 +851,96 @@ function _nested2batch!(arr, offset, x::AbstractArray)
         error("Input array is mixing array and non-array elements")
     end
 end
+
+"""
+    batch2nested(x)
+
+convert single array into nested array.
+
+See also: [`nested2batch`](@ref)
+
+# Example
+```julia-repl
+julia> x = ["a" "d"; "b" "e"; "c" "f";;; "x" "u"; "y" "v"; "z" "w"; ]
+3×2×2 Array{String, 3}:
+[:, :, 1] =
+ "a"  "d"
+ "b"  "e"
+ "c"  "f"
+
+[:, :, 2] =
+ "x"  "u"
+ "y"  "v"
+ "z"  "w"
+
+julia> TextEncodeBase.batch2nested(x)
+2-element Vector{Vector{Vector{String}}}:
+ [["a", "b", "c"], ["d", "e", "f"]]
+ [["x", "y", "z"], ["u", "v", "w"]]
+
+```
+"""
+function batch2nested(x::AbstractArray)
+    return _batch2nested(x, size(x))
+end
+
+_batch2nested(x, ::Tuple{Int}) = collect(x)
+function _batch2nested(x, s::Tuple)
+    dim = length(s)
+    len = s[end]
+    s = Base.front(s)
+    X = eachslice(x; dims = dim)
+    y = Vector{Core.Compiler.return_type(_batch2nested, Tuple{eltype(X), typeof(s)})}(undef, len)
+    return map!(xi->_batch2nested(xi, s), y, X)
+end
+
+
+"""
+    join_text(x::AbstractArray [, delim [, last]])
+
+`join` the inner most array and preserve the array structure. If the inner most array is multi-dimensional, `join`
+ text along the first dimension.
+
+# Example
+```julia-repl
+julia> TextEncodeBase.join_text([["a", "b", "c"], ['x', 'y', 'z']])
+2-element Vector{String}:
+ "abc"
+ "xyz"
+
+julia> TextEncodeBase.join_text([["a", "b", "c"], ['x', 'y', 'z']], " + ")
+2-element Vector{String}:
+ "a + b + c"
+ "x + y + z"
+
+julia> TextEncodeBase.join_text([[["a", "b", "c"], ['x', 'y', 'z']]], " + ", " = ")
+1-element Vector{Vector{String}}:
+ ["a + b = c", "x + y = z"]
+
+julia> TextEncodeBase.join_text(["a" "d"; "b" "e"; "c" "f";;; "x" "u"; "y" "v"; "z" "w"; ], " + ", " = ")
+2×2 Matrix{String}:
+ "a + b = c"  "x + y = z"
+ "d + e = f"  "u + v = w"
+
+```
+"""
+function join_text(x::AbstractArray, delim = "", last = delim)
+    stype = peek_sequence_sample_type(x)
+    if stype == SingleSample
+        N = ndims(x)
+        if N == 1
+            return join(x, delim, last)
+        else
+            return map(FixRest(join, delim, last), eachslice(x, dims = ntuple(x->x+1, Val(N - 1))))
+        end
+    elseif stype >= UnknownSample
+        return @elementmap x join_text(x, delim, last)
+        # return map(FixRest(join_text, delim, last), x)
+    else
+        error("Input array is mixing array and non-array elements")
+    end
+end
+
 
 # Sequence template
 
