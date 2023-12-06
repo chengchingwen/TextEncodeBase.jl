@@ -1,4 +1,6 @@
-struct MixedTokenization{T <:Tuple{<:AbstractTokenization, Vararg{<:AbstractTokenization}}} <: AbstractTokenization
+using DataStructures: MutableLinkedList
+
+struct MixedTokenization{T <:Tuple{AbstractTokenization, Vararg{AbstractTokenization}}} <: AbstractTokenization
     ts::T
 end
 MixedTokenization(t, t2, ts...) = MixedTokenization((t, t2, ts...))
@@ -33,9 +35,9 @@ NestedTokenizer() = NestedTokenizer(DefaultTokenization())
 
 tokenization(tkr::NestedTokenizer) = tkr.tokenization
 
-@inline tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::TokenStages) = tokenize_procedure!(push!, Vector{Vector}[], tkr, p, t, x)
-@inline tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::DocumentStage) = tokenize_procedure!(push!, Vector{TokenStage}[], tkr, p, t, x)
-@inline tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::Union{SentenceStage, SubSentenceStage, WordStage, SubWordStage}) = tokenize_procedure!(append!, TokenStage[], tkr, p, t, x)
+@inline tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::TokenStages) = collect(tokenize_procedure!(push!, MutableLinkedList{Vector{Vector}}(), tkr, p, t, x))
+@inline tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::DocumentStage) = collect(tokenize_procedure!(push!, MutableLinkedList{Vector{TokenStage}}(), tkr, p, t, x))
+@inline tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::Union{SentenceStage, SubSentenceStage, WordStage, SubWordStage}) = collect(tokenize_procedure!(append!, MutableLinkedList{TokenStage}(), tkr, p, t, x))
 @inline tokenize(tkr::NestedTokenizer, ::Nothing, t::AbstractTokenization, x::SentenceStage) = [tokenize_procedure(tkr, nothing, t, x)]
 
 @inline tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::TokenStage) = isempty(getvalue(x)) ? TokenStage[] : TokenStage[wrap(tkr, p, t, x)]

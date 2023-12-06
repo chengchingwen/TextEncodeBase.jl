@@ -1,3 +1,5 @@
+using DataStructures: MutableLinkedList
+
 struct Batch{S, A<:AbstractVector, M} <: TokenStages
     x::A
     meta::M
@@ -22,9 +24,9 @@ wrap(::BaseTokenization, b::Batch{S},  x) where S = S(x, getmeta(b))
 
 # nested
 
-tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::Batch{Document}) = tokenize_procedure!(push!, Vector{Vector{TokenStage}}[], tkr, p, t, x)
+tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::Batch{Document}) = collect(tokenize_procedure!(push!, MutableLinkedList{Vector{Vector{TokenStage}}}(), tkr, p, t, x))
 
-tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::Batch{Sentence}) = tokenize_procedure!(push!, Vector{TokenStage}[], tkr, p, t, x)
+tokenize(tkr::NestedTokenizer, p::ParentStages, t::AbstractTokenization, x::Batch{Sentence}) = collect(tokenize_procedure!(push!, MutableLinkedList{Vector{TokenStage}}(), tkr, p, t, x))
 
 # indexed
 

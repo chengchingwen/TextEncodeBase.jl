@@ -1,3 +1,14 @@
+using DataStructures: MutableLinkedList
+# DataStructures.jl #883
+# The current `append!` behavior for multiple iterable is `push!`, not `append!`
+# So we overwrite this for correct behavior
+function Base.append!(l::MutableLinkedList, elt)
+    for v in elt
+        push!(l, v)
+    end
+    return l
+end
+
 using WordTokenizers: rulebased_split_sentences, nltk_word_tokenize
 
 """
@@ -171,7 +182,7 @@ end
 The procedure of tokenization (`splitting` + `wrap` + `tokenize`).
 """
 @inline tokenize_procedure(tkr, t, x) = tokenize_procedure(tkr, t, nothing, x)
-@inline tokenize_procedure(tkr, s, t, x) = tokenize_procedure!(append!, splittability, TokenStage[], tkr, s, t, x)
+@inline tokenize_procedure(tkr, s, t, x) = collect(tokenize_procedure!(append!, splittability, MutableLinkedList{TokenStage}(), tkr, s, t, x))
 @inline tokenize_procedure!(op, v, tkr, s, t, x) = tokenize_procedure!(op, splittability, v, tkr, s, t, x)
 @inline tokenize_procedure!(op, ::typeof(splittability), v, tkr, s, t, x) = tokenize_procedure!(op, splittability(tkr, s, t, x), v, tkr, s, t, x)
 
