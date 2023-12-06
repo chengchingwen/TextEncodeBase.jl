@@ -21,7 +21,7 @@ using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     SentenceReplaceNormalizer, WordReplaceNormalizer,
     TokenStages, Document, Sentence, Word, Token, Batch
 using TextEncodeBase: getvalue, getmeta, updatevalue,
-    with_head_tail, trunc_and_pad, trunc_or_pad, nested2batch, nestedcall
+    with_head_tail, trunc_and_pad, trunc_or_pad, nested2batch, batch2nested, nestedcall, join_text
 using TextEncodeBase: SequenceTemplate, InputTerm, IndexInputTerm, ConstTerm, RepeatedTerm
 
 using WordTokenizers
@@ -714,7 +714,17 @@ end
             end
         end
 
-        @testset "nested2batch" begin
+        @testset "join_text" begin
+            @test join_text(["a", "b", "c"]) == "abc"
+            @test join_text([["a", "b", "c"]]) == ["abc"]
+            @test join_text([[["a", "b", "c"]]]) == [["abc"]]
+            x = ["a" "d"; "b" "e"; "c" "f";;; "x" "u"; "y" "v"; "z" "w"; ]
+            @test join_text(x, " + ", " = ") == ["a + b = c" "x + y = z"; "d + e = f" "u + v = w"]
+            @test join_text(x, " + ") == ["a + b + c" "x + y + z"; "d + e + f" "u + v + w"]
+            @test join_text(x) == ["abc" "xyz"; "def" "uvw"]
+        end
+
+        @testset "nested2batch / batch2nested" begin
             x = randn(5,4,3,2)
             x_slices = [x[i:i+5-1] for i in 1:5:length(x)]
             y = [[[x_slices[1],x_slices[2],x_slices[3],x_slices[4]],
@@ -754,7 +764,7 @@ end
             @test nested2batch(y3) == x
             @test nested2batch(y4) == x
             @test nested2batch(y5) == x
-
+            @test nested2batch(batch2nested(x)) == x
             @test_throws DimensionMismatch nested2batch([[1:5], 2:6])
         end
 
