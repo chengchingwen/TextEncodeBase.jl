@@ -80,6 +80,24 @@ normalizer(t::WordReplaceNormalizer) = Base.Fix2(replace, t.pattern)
 
 const ReplaceNormalizer = SentenceReplaceNormalizer
 
+### general function
+
+struct SentenceFuncNormalizer{T<:AbstractTokenization, F} <: SentenceNormalizer{T}
+    base::T
+    func::F
+end
+SentenceFuncNormalizer(func) = SentenceFuncNormalizer(DefaultTokenization(), func)
+
+normalizer(t::SentenceFuncNormalizer) = t.func
+
+struct WordFuncNormalizer{T<:AbstractTokenization, F} <: WordNormalizer{T}
+    base::T
+    func::F
+end
+WordFuncNormalizer(func) = WordFuncNormalizer(DefaultTokenization(), func)
+
+normalizer(t::WordFuncNormalizer) = t.func
+
 ### Codemap
 
 include("./codemap.jl")
