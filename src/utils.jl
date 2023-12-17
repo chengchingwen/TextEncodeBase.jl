@@ -1,3 +1,4 @@
+using DataStructures: MutableLinkedList
 using FuncPipelines: FixRest
 using RustRegex
 
@@ -157,15 +158,15 @@ end
 struct MatchSplits{P <: AbstractPattern, I <: MatchSplitIterator}
     regexes::Vector{P}
     str::SubString{String}
-    states::Vector{I}
+    states::MutableLinkedList{I}
     function MatchSplits(regexes::Vector{P}, str::SubString{String}) where P <:AbstractPattern
         n = length(regexes)
         @assert n != 0
         itr1 = MatchSplitIterator(regexes[1], str)
         if P == AbstractPattern
-            states = MatchSplitIterator[itr1]
+            states = MutableLinkedList{MatchSplitIterator}(itr1)
         else
-            states = [itr1]
+            states = MutableLinkedList{typeof(itr1)}(itr1)
         end
         return new{P, eltype(states)}(regexes, str, states)
     end
