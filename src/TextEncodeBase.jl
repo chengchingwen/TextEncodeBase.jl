@@ -23,6 +23,7 @@ include("./replace.jl")
 # vocab
 export AbstractVocabulary, Vocab, lookup, OneHot, OneHotArray
 
+include("./lookupvector.jl")
 include("./vocab.jl")
 
 # reexport pipeline

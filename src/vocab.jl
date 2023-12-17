@@ -29,7 +29,7 @@ function Vocab{T}(data::AbstractVector, unk) where T
     udata = Vector{T}(undef, length(data))
     unk = T(unk)
     unique!(map!(T, udata, data))
-    list = SizedVector{length(udata)}(udata)
+    list = SizedVector{length(udata)}(OverwritableLookupVector(udata))
     i = findfirst(==(unk), list)
     unki = isnothing(i) ? 0 : i
     return Vocab(list, unk, unki)
