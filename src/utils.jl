@@ -162,7 +162,7 @@ struct MatchSplits{P <: AbstractPattern, I <: MatchSplitIterator}
     function MatchSplits(regexes::Vector{P}, str::SubString{String}) where P <:AbstractPattern
         n = length(regexes)
         @assert n != 0
-        itr1 = MatchSplitIterator(regexes[1], str)
+        itr1 = MatchSplitIterator(@inbounds(regexes[1]), str)
         if P == AbstractPattern
             states = MutableLinkedList{MatchSplitIterator}(itr1)
         else
@@ -186,7 +186,7 @@ function Base.iterate(itr::MatchSplits, _ = nothing)
     itr_i = @inbounds state[level]
     I = Base.iterate(itr_i)
     if isnothing(I)
-        finalize(pop!(state).regex_and_state.state)
+        pop!(state)
         @goto ms_itr_start
     end
     v, _ = I
