@@ -18,6 +18,7 @@ using TextEncodeBase: AbstractTokenizer, AbstractTokenization,
     EachMatchTokenization, MatchSplitsTokenization,
     IndexedTokenization, MatchTokenization,
     UnicodeNormalizer, CodeNormalizer, CodeUnMap,
+    SentenceFuncNormalizer, WordFuncNormalizer,
     SentenceReplaceNormalizer, WordReplaceNormalizer,
     TokenStages, Document, Sentence, Word, Token, Batch
 using TextEncodeBase: getvalue, getmeta, updatevalue,
@@ -166,6 +167,19 @@ end
             @test map(getvalue, tkr1(sentence)) == nltk_word_tokenize("--" * sentence.x)
             @test tkr1(word) == [Token("--" * word.x)]
             tkr2 = FlatTokenizer(WordReplaceNormalizer(r"(.+)"=>s"--\1"))
+            @test map(getvalue, tkr2(document)) == map(
+                Base.Fix1(*, "--"), mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x)))
+            @test map(getvalue, tkr2(sentence)) == map(Base.Fix1(*, "--"), nltk_word_tokenize(sentence.x))
+            @test tkr2(word) == [Token("--" * word.x)]
+        end
+
+        @testset "func normalizer" begin
+            tkr1 = FlatTokenizer(SentenceFuncNormalizer(Base.Fix2(replace, r"(.+)"=>s"--\1")))
+            @test map(getvalue, tkr1(document)) ==
+                mapfoldl(nltk_word_tokenize ∘ Base.Fix1(*, "--"), append!, split_sentences(document.x))
+            @test map(getvalue, tkr1(sentence)) == nltk_word_tokenize("--" * sentence.x)
+            @test tkr1(word) == [Token("--" * word.x)]
+            tkr2 = FlatTokenizer(WordFuncNormalizer(Base.Fix2(replace, r"(.+)"=>s"--\1")))
             @test map(getvalue, tkr2(document)) == map(
                 Base.Fix1(*, "--"), mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x)))
             @test map(getvalue, tkr2(sentence)) == map(Base.Fix1(*, "--"), nltk_word_tokenize(sentence.x))
@@ -518,6 +532,17 @@ end
             @test lookup(vocab, OneHot(5, 4)) == "[UNK]"
             @test lookup(vocab, OneHotArray(3, [1,2,3,0])) == ["a", "b", "c", "[UNK]"]
             @test lookup(vocab, OneHotArray(3, [1 2 3; 3 0 1])) == ["a" "b" "c"; "c" "[UNK]" "a"]
+        end
+
+        @testset "overwrite" begin
+            vocab_overwrite = Vocab(["a", "b", "c"])
+            @test_throws AssertionError vocab_overwrite.list.data["a"] = "c"
+            @test_throws BoundsError vocab_overwrite.list.data[0] = "x"
+            vocab_overwrite.list.data["b"] = "x"
+            @test vocab_overwrite.list == ["a", "x", "c"]
+            @test lookup(vocab_overwrite, 2) == "x"
+            @test lookup(vocab_overwrite, "b") == 0
+            @test lookup(vocab_overwrite, "x") == 2
         end
     end
 
