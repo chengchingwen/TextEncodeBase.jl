@@ -141,7 +141,7 @@ function lookup_word(v::OverwritableLookupVector, unk, index)
 end
 
 function Base.setindex!(v::OverwritableLookupVector, val, i::Integer)
-    @boundscheck 0 < i <= length(v)
+    @boundscheck checkbounds(v, i)
     @assert iszero(lookup_index(v, 0, val)) "Element must be unique, value $(repr(val)) already in the lookup vector"
     k = lookup_word(v.dict, nothing, i)
     isnothing(k) || delete!(v.dict.dict, k)
