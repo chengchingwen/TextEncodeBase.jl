@@ -44,32 +44,34 @@ function Base.show(io::IO, v::Vocab)
     print(io, ", unki = ", v.unki, ')')
 end
 
-_lookup_index(list, unki, s) = (i = findfirst(==(s), list); isnothing(i) ? unki : i)
-_lookup_word(list, unk, i) = 0 < i <= length(list) ? list[i] : unk
+
+lookup_index(v::Vocab, word) = lookup_index(v.list, v.unki, word)
+lookup_index(list::SizedVector, unki, word) = lookup_index(list.data, unki, word)
+lookup_index(list, unki, word) = (i = findfirst(==(word), list); isnothing(i) ? unki : i)
+
+lookup_word(v::Vocab, index) = lookup_word(v.list, v.unk, index)
+lookup_word(list::SizedVector, unk, index) = lookup_word(list.data, unk, index)
+lookup_word(list, unk, index) = 0 < index <= length(list) ? @inbounds(list[index]) : unk
 
 lookup(v::Vocab) = Base.Fix1(lookup,  v)
 lookup(::Type{T}, v::Vocab) where T = lookup $ T $ v
-lookup(::Type{I}, v::Vocab{T}, s::T) where {T, I<:Integer} = I(_lookup_index(v.list, v.unki, s))
-lookup(::Type{I}, v::Vocab{<:AbstractString}, s::AbstractString) where I<:Integer = I(_lookup_index(v.list, v.unki, s))
-lookup(::Type{T}, v::Vocab{T}, i::Integer) where T = _lookup_word(v.list, v.unk, i)
+
+lookup(::Type{I}, v::Vocab{T}, word::T) where {T, I<:Integer} = I(lookup_index(v, word))
+lookup(::Type{I}, v::Vocab{<:Integer}, word::Integer) where I<:Integer = I(lookup_index(v, word))
+lookup(::Type{I}, v::Vocab{<:AbstractString}, word::AbstractString) where I<:Integer = I(lookup_index(v, word))
+lookup(::Type{T}, v::Vocab{T}, index::Integer) where T = lookup_word(v, index)
 lookup(::Type{<:Integer}, v::Vocab{T}, i::Integer) where T = throw(DomainError(i, "Cannot lookup the value $i in the vocabulary: value should have the same type as Vocab's element type ($(eltype(v)))"))
 
-lookup(v::Vocab{<:AbstractString}, s::AbstractString) = lookup(Int, v, s)
-lookup(v::Vocab{T}, s::T) where T = lookup(Int, v, s)
+lookup(v::Vocab{T}, word::T) where T = lookup(Int, v, word)
+lookup(v::Vocab{<:AbstractString}, word::AbstractString) = lookup(Int, v, word)
+lookup(v::Vocab{<:Integer}, index::Integer) = lookup_word(v, index)
+lookup(v::Vocab, index::Integer) = lookup(eltype(v), v, index)
 
-lookup(v::Vocab, i::Integer) = lookup(eltype(v), v, i)
 lookup(v::Vocab, i, j, k...) = (lookup(v, i), lookup(v, j), map(lookup(v), k)...)
 lookup(v::Vocab, is::Union{AbstractArray, Tuple, NamedTuple}) = map(lookup(v), is)
-
 lookup(::Type{T}, v::Vocab, i, j, k...) where T = lookup(T, v, (i, j, k...))
 lookup(::Type{T}, v::Vocab, is::Union{AbstractArray, Tuple, NamedTuple}) where T = map(lookup(T, v), is)
 
-# handle Vocab{Int}
-# by default calling lookup(v, i) only do word lookup (i.e. v.list[i]), use lookup(Int, v, i) for index lookup
-lookup(v::Vocab{T}, i::Integer) where T <: Integer = _lookup_word(v.list, v.unk, i)
-lookup(::Type{I}, v::Vocab{<:Integer}, s::Integer) where I<:Integer = I(_lookup_index(v.list, v.unki, s))
-
-# lookup(::Type{OneHot}, v::Vocab) = lookup $ OneHot $ v
 lookup(::Type{OneHot}, v::Vocab, i) = lookup_onehot(v, i)
 lookup(T::Type{OneHot}, v::Vocab, is::AbstractArray) = OneHotArray{length(v)}(lookup_onehot(v, is))
 lookup(::Type{OneHot}, v::Vocab, is::Union{Tuple, NamedTuple}) = map(lookup(OneHot, v), is)
