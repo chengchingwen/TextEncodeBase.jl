@@ -275,6 +275,23 @@ julia> collect(matchsplits([r"ab", r"bc"], "abc"^3))
 """
 matchsplits(t::Vector{<:AbstractPattern}, s)
 
+struct FindAllIterator{S, P}
+    pattern::P
+    str::S
+end
+
+Base.eltype(::Type{<:FindAllIterator{Union{String, SubString}}}) = SubString{String}
+Base.eltype(::Type{<:FindAllIterator{AbstractString}}) = String
+Base.IteratorSize(::Type{<:FindAllIterator}) = Base.SizeUnknown()
+
+function Base.iterate(itr::FindAllIterator, state = firstindex(itr.str))
+    str = itr.str
+    found = findnext(itr.pattern, str, state)
+    isnothing(found) && return nothing
+    result = @inbounds eltype(itr) <: SubString ? @view(str[found]) : str[found]
+    nstate = nextind(str, last(found))
+    return result, nstate
+end
 
 # misc
 

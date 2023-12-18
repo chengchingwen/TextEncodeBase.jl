@@ -15,7 +15,7 @@ struct EachMatchTokenization{P<:AbstractPattern} <: BaseTokenization
 end
 EachMatchTokenization(r) = EachMatchTokenization(as_match(r))
 
-splitting(t::EachMatchTokenization, s::SentenceStage) = Iterators.map(x->String(x.match), eachmatch(t.pattern, getvalue(s)))
+splitting(t::EachMatchTokenization, s::SentenceStage) = FindAllIterator(t.pattern, getvalue(s))
 
 struct MatchSplitsTokenization{P <: Union{AbstractPattern, Vector{<:AbstractPattern}}} <: BaseTokenization
     pattern::P

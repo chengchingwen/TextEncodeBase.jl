@@ -77,8 +77,8 @@ end
             @test map(getvalue, tkr_s(document)) == filter(!=("."), mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x)))
             @test map(getvalue, tkr_s(sentence)) == filter(!=("."), nltk_word_tokenize(sentence.x))
             @test tkr_s(word) == [Token(word.x)]
-            @test tkr_m(document) == map(Token, mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x)))
-            @test tkr_m(sentence) == map(Token, nltk_word_tokenize(sentence.x))
+            @test map(getvalue, tkr_m(document)) == mapfoldl(nltk_word_tokenize, append!, split_sentences(document.x))
+            @test map(getvalue, tkr_m(sentence)) == nltk_word_tokenize(sentence.x)
             @test tkr_m(word) == [Token(word.x)]
 
             @test map(getvalue, tkr_s(Sentence("a    b"))) == ["a", "b"]
