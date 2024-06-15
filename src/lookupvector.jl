@@ -4,16 +4,15 @@ using DoubleArrayTries: DoubleArrayTrie
 lookup(dat::DoubleArrayTrie, i::Integer) = DoubleArrayTries.decode(dat, i)
 lookup(dat::DoubleArrayTrie, k::Union{AbstractString, AbstractVector{UInt8}}) = DoubleArrayTries.lookup(dat, k)
 
-
 abstract type LookupDict{T} <: AbstractDict{T, Int} end
 LookupDict(list::AbstractVector) = LookupDict(keytype(list), list)
 LookupDict(::Type{<:AbstractString}, list) = DATLookupDict(list)
 LookupDict(::Type, list) = DictBackedLookupDict(list)
 
-struct DATLookupDict <: LookupDict{String}
+struct DATLookupDict{V <: Union{AbstractVector{UInt64}, AbstractDict{Int, UInt64}}} <: LookupDict{String}
     trie::DoubleArrayTrie
     uid2idx::DoubleArrayTries.CVector
-    idx2uid::DoubleArrayTries.CVector
+    idx2uid::V
 end
 
 function DATLookupDict(list::AbstractVector{<:AbstractString})
@@ -48,7 +47,16 @@ function Base.iterate(d::DATLookupDict, state = nothing)
 end
 
 lookup_index(d::DATLookupDict, unki, word) = get(d, word, unki)
-lookup_word(d::DATLookupDict, unk, index) = 0 < index <= length(d) ? lookup(d.trie, idx2uid(d, index)) : unk
+function lookup_word(d::DATLookupDict, unk, index)
+    if d.idx2uid isa AbstractVector
+        checkbounds(Bool, d.idx2uid, index) || return unk
+        uid = @inbounds d.idx2uid[index]
+    else
+        isempty(d.idx2uid) && return unk
+        uid = get(d.idx2uid, index, zero(UInt64))
+    end
+    return iszero(uid) ? unk : lookup(d.trie, uid)
+end
 
 struct DictBackedLookupDict{T, D <: AbstractDict{T, Int},
                             V <: Union{AbstractVector{T}, AbstractDict{Int, T}}} <: LookupDict{T}
@@ -72,7 +80,8 @@ Base.iterate(d::DictBackedLookupDict, state...) = iterate(d.dict, state...)
 lookup_index(d::DictBackedLookupDict, unki, word) = isempty(d.dict) ? unki : get(d, word, unki)
 function lookup_word(d::DictBackedLookupDict, unk, index)
     if d.list isa AbstractVector
-        return 0 < index <= length(d) ? @inbounds(d.list[index]) : unk
+        checkbounds(Bool, d.list, index) || return unk
+        return @inbounds(d.list[index])
     else
         return isempty(d.list) ? unk : get(d.list, index, unk)
     end
@@ -83,35 +92,34 @@ LookupVector(list::AbstractVector) = LookupVector(eltype(list), list)
 LookupVector(::Type{<:AbstractString}, list) = DATLookupVector(list)
 LookupVector(::Type, list) = DictBackedLookupVector(list)
 
-struct DATLookupVector <: LookupVector{String}
-    dict::DATLookupDict
+struct DATLookupVector{D <: DATLookupDict} <: LookupVector{String}
+    dict::D
 end
-
+basedict(v::DATLookupVector) = v.dict
 DATLookupVector(vector::AbstractVector) = DATLookupVector(DATLookupDict(vector))
 
 struct DictBackedLookupVector{T, D <: LookupDict{T}} <: LookupVector{T}
     dict::D
 end
-
+basedict(v::DictBackedLookupVector) = v.dict
 DictBackedLookupVector(vector::AbstractVector) = DictBackedLookupVector(DictBackedLookupDict(vector))
 
-Base.length(v::LookupVector) = length(v.dict)
+Base.length(v::LookupVector) = length(basedict(v))
 Base.size(v::LookupVector) = (length(v),)
-Base.checkbounds(::Type{Bool}, v::LookupVector, i) = 0 < i <= length(v)
-@inline function Base.getindex(v::LookupVector, i::Integer)
+Base.checkbounds(::Type{Bool}, v::LookupVector, i) = !isnothing(lookup_word(v, nothing, i))
+function Base.getindex(v::LookupVector, i::Integer)
     k = lookup_word(v, nothing, i)
-    @boundscheck checkbounds(v, i)
+    @boundscheck isnothing(k) && throw(BoundsError(v, i))
     return k
 end
 
-lookup_index(v::LookupVector, unki, word) = lookup_index(v.dict, unki, word)
-lookup_word(v::LookupVector, unk, index) = lookup_word(v.dict, unk, index)
+lookup_index(v::LookupVector, unki, word) = lookup_index(basedict(v), unki, word)
+lookup_word(v::LookupVector, unk, index) = lookup_word(basedict(v), unk, index)
 
 struct OverwritableLookupVector{T, V <: LookupVector{T}, D <: DictBackedLookupDict{T}} <: LookupVector{T}
     vector::V
     dict::D
 end
-
 OverwritableLookupVector(vector::AbstractVector) = OverwritableLookupVector(LookupVector(vector))
 function OverwritableLookupVector(vector::LookupVector)
     T = eltype(vector)
@@ -120,13 +128,6 @@ function OverwritableLookupVector(vector::LookupVector)
 end
 
 Base.length(v::OverwritableLookupVector) = length(v.vector)
-Base.size(v::OverwritableLookupVector) = (length(v),)
-Base.checkbounds(::Type{Bool}, v::OverwritableLookupVector, i) = 0 < i <= length(v)
-function Base.getindex(v::OverwritableLookupVector, i::Integer)
-    k = lookup_word(v, nothing, i)
-    @boundscheck isnothing(k)
-    return k
-end
 
 function lookup_index(v::OverwritableLookupVector, unki, word)
     i = lookup_index(v.dict, 0, word)
@@ -150,6 +151,44 @@ function Base.setindex!(v::OverwritableLookupVector, val, i::Integer)
     return v
 end
 function Base.setindex!(v::OverwritableLookupVector, val, k)
+    i = lookup_index(v, 0, k)
+    iszero(i) && throw(KeyError(k))
+    return v[i] = val
+end
+
+struct PerforatedOverwritableLookupVector{T, V <: LookupVector{T}, D <: DictBackedLookupDict{T}} <: LookupVector{T}
+    vector::V
+    dict::D
+end
+
+Base.length(v::PerforatedOverwritableLookupVector) = max(length(v.vector), maximum(keys(v.dict.list)))
+function Base.getindex(v::PerforatedOverwritableLookupVector, i::Integer)
+    k = lookup_word(v, nothing, i)
+    isnothing(k) && throw(UndefRefError())
+    return k
+end
+
+function lookup_index(v::PerforatedOverwritableLookupVector, unki, word)
+    i = lookup_index(v.dict, 0, word)
+    iszero(i) || return i
+    i = lookup_index(v.vector, 0, word)
+    iszero(i) && return unki
+    return isnothing(lookup_word(v.dict, nothing, i)) ? i : unki
+end
+function lookup_word(v::PerforatedOverwritableLookupVector, unk, index)
+    k = lookup_word(v.dict, nothing, index)
+    return isnothing(k) ? lookup_word(v.vector, unk, index) : k
+end
+
+function Base.setindex!(v::PerforatedOverwritableLookupVector, val, i::Integer)
+    @assert iszero(lookup_index(v, 0, val)) "Element must be unique, value $(repr(val)) already in the lookup vector"
+    k = lookup_word(v.dict, nothing, i)
+    isnothing(k) || delete!(v.dict.dict, k)
+    v.dict.dict[val] = i
+    v.dict.list[i] = val
+    return v
+end
+function Base.setindex!(v::PerforatedOverwritableLookupVector, val, k)
     i = lookup_index(v, 0, k)
     iszero(i) && throw(KeyError(k))
     return v[i] = val
