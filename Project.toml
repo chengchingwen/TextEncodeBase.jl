@@ -1,7 +1,7 @@
 name = "TextEncodeBase"
 uuid = "f92c20c0-9f2a-4705-8116-881385faba05"
 authors = ["chengchingwen <adgjl5645@hotmail.com> and contributors"]
-version = "0.8.2"
+version = "0.8.3"
 
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
@@ -17,7 +17,7 @@ WordTokenizers = "796a5d58-b03d-544a-977e-18100b691f6e"
 
 [compat]
 DataStructures = "0.18"
-DoubleArrayTries = "0.1"
+DoubleArrayTries = "0.1.1"
 FuncPipelines = "0.1, 0.2"
 PartialFunctions = "1.1"
 PrimitiveOneHot = "0.1.2, 0.2"
