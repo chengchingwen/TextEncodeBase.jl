@@ -224,15 +224,14 @@ Overload this method to control the tokenization process.
 """
 function wrap end
 
-@eval $((@macroexpand @doc """
+@doc """
     wrap(t::AbstractTokenization, x::TokenStages)
 
 A handler for unsplittable stages (token/word/...).
 
 Overload this method for custom transform.
 """
-function wrap(t::AbstractTokenization, x::TokenStages) end
-).args[2])
+wrap(t::AbstractTokenization, x::TokenStages)
 
 
 # abstract type for convenience

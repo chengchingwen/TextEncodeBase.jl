@@ -144,7 +144,7 @@ julia> lookup(vocab_unk, 10000)
 """
 function lookup end
 
-@eval $((@macroexpand @doc """
+@doc """
     lookup(Int, v::Vocab, x)
 
 The explicit version of `lookup(v, x)`. Lookup the indice of `x` in the vocabulary
@@ -160,10 +160,9 @@ julia> lookup(Int, vocab_unk, "b")
 
 ```
 """
-function lookup(Int, v::Vocab, x) end
-).args[2])
+lookup(Int, v::Vocab, x)
 
-@eval $((@macroexpand @doc """
+@doc """
     lookup(::Type{T}, v::Vocab{T}, i::Integer) where T
 
 The explicit version of `lookup(v, i)`. Lookup the word at index `i` on vocabulary
@@ -181,9 +180,8 @@ julia> lookup(String, vocab_unk, 1)
 ```
 """
 lookup(::Type{T}, v::Vocab{T}, i::Integer) where T
-).args[2])
 
-@eval $((@macroexpand @doc """
+@doc """
     lookup(v::Vocab, is::AbstractArray)
 
 recursively lookup value from `is`
@@ -208,10 +206,9 @@ julia> lookup(vocab, [1, "a", 0, "A", "[UNK]"])
 
 ```
 """
-function lookup(v::Vocab, is::AbstractArray) end
-).args[2])
+lookup(v::Vocab, is::AbstractArray)
 
-@eval $((@macroexpand @doc """
+@doc """
     lookup(OneHot, v::Vocab, i)
 
 lookup `i` and convert into one-hot representation.
@@ -244,10 +241,9 @@ Stacktrace:
 
 ```
 """
-function lookup(::Type{OneHot}, v::Vocab, i) end
-).args[2])
+lookup(::Type{OneHot}, v::Vocab, i)
 
-@eval $((@macroexpand @doc """
+@doc """
     lookup(v::Vocab, i::OneHotArray)
 
 convert the one-hot representation back into words.
@@ -273,5 +269,4 @@ julia> lookup(vocab, ans)
 
 ```
 """
-function lookup(v::Vocab, i::OneHotArray) end
-).args[2])
+lookup(v::Vocab, i::OneHotArray)
